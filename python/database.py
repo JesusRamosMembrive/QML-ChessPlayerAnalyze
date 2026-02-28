@@ -155,6 +155,18 @@ class GameAnalysis(SQLModel, table=True):
     #   "psychological_profile": "RESILIENT_CLOSER"
     # }
 
+    # Difficulty Metrics (Position Difficulty & Advanced Cheat Detection)
+    difficulty_metrics: str | None = Field(default=None, sa_column=Column(JSON))
+    # Structure: {
+    #   "avg_sharpness": 42.5,
+    #   "cwmr": 0.35, "cwmr_delta": 0.12,
+    #   "cpa": 0.25, "critical_positions": 8,
+    #   "sensitivity": 0.22, "ubma": 0.40, "unique_positions": 5,
+    #   "variance_ratio": 1.1, "critical_accuracy_boost": -0.05,
+    #   "oscillation_score": 12.3,
+    #   "mismatch_rate": 0.08, "effort_ratio": 1.3
+    # }
+
     # Analysis metadata
     stockfish_depth: int = Field(default=12)
     analyzed_at: datetime = Field(default_factory=datetime.utcnow)
@@ -256,6 +268,19 @@ class PlayerAggregate(SQLModel, table=True):
     variance_drop: float | None = None  # Average std dev drop opening→middle (Signal 12)
     post_pause_improvement: float | None = None  # Average ACPL improvement after pauses (Signal 13)
 
+    # Difficulty Metrics (Position Difficulty & Advanced Cheat Detection)
+    cwmr_mean: float | None = None  # Average CWMR (0-1)
+    cwmr_delta_mean: float | None = None  # Average CWMR delta (raw - weighted)
+    cpa_mean: float | None = None  # Average Critical Position Accuracy (0-1)
+    sensitivity_mean: float | None = None  # Average Difficulty Sensitivity
+    ubma_mean: float | None = None  # Average Unique Best Move Accuracy (0-1)
+    variance_ratio_mean: float | None = None  # Average variance ratio (easy/hard)
+    critical_accuracy_boost_mean: float | None = None  # Average critical moment accuracy boost
+    oscillation_score_mean: float | None = None  # Average oscillation pattern score
+    mismatch_rate_mean: float | None = None  # Average effort-quality mismatch rate
+    effort_ratio_mean: float | None = None  # Average effort ratio (time on correct hard / avg)
+    avg_sharpness_mean: float | None = None  # Average position sharpness across games
+
     # Phase 1C: Temporal Window Analysis (Signals 14, 15)
     window_analysis: str | None = Field(default=None, sa_column=Column(JSON))
     # Structure: {
@@ -315,9 +340,67 @@ def get_engine():
     return engine
 
 
+def migrate_database(engine):
+    """
+    Migrate existing database by adding missing columns.
+
+    Uses PRAGMA table_info to detect missing columns and ALTER TABLE ADD COLUMN
+    to add them. Safe to call multiple times (idempotent).
+    """
+    import sqlite3
+
+    db_path = get_database_path()
+    if not db_path.exists():
+        return  # No database to migrate
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+
+        # Define expected columns per table: (column_name, sql_type, default)
+        migrations = {
+            "gameanalysis": [
+                ("difficulty_metrics", "TEXT", None),
+            ],
+            "playeraggregate": [
+                ("cwmr_mean", "FLOAT", None),
+                ("cwmr_delta_mean", "FLOAT", None),
+                ("cpa_mean", "FLOAT", None),
+                ("sensitivity_mean", "FLOAT", None),
+                ("ubma_mean", "FLOAT", None),
+                ("variance_ratio_mean", "FLOAT", None),
+                ("critical_accuracy_boost_mean", "FLOAT", None),
+                ("oscillation_score_mean", "FLOAT", None),
+                ("mismatch_rate_mean", "FLOAT", None),
+                ("effort_ratio_mean", "FLOAT", None),
+                ("avg_sharpness_mean", "FLOAT", None),
+            ],
+        }
+
+        for table, columns in migrations.items():
+            # Get existing columns
+            cursor.execute(f"PRAGMA table_info({table})")
+            existing = {row[1] for row in cursor.fetchall()}
+
+            if not existing:
+                continue  # Table doesn't exist yet, create_all will handle it
+
+            for col_name, col_type, default in columns:
+                if col_name not in existing:
+                    default_clause = f" DEFAULT {default}" if default is not None else ""
+                    sql = f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}{default_clause}"
+                    cursor.execute(sql)
+                    print(f"  Migration: added {table}.{col_name} ({col_type})")
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def create_tables():
     """Create all tables in the database."""
     engine = get_engine()
+    migrate_database(engine)
     SQLModel.metadata.create_all(engine)
     return engine
 

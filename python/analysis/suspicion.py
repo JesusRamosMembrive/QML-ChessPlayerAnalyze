@@ -86,15 +86,25 @@ def calculate_suspicion_score(
     opening_to_middle_improvement: Optional[float] = None,
     variance_drop: Optional[float] = None,
     post_pause_improvement: Optional[float] = None,
+    # Difficulty & Advanced Detection signals (Signals 14-21)
+    cwmr_delta: Optional[float] = None,
+    cpa: Optional[float] = None,
+    sensitivity: Optional[float] = None,
+    ubma: Optional[float] = None,
+    difficulty_variance_ratio: Optional[float] = None,
+    critical_accuracy_boost: Optional[float] = None,
+    oscillation_score: Optional[float] = None,
+    mismatch_rate: Optional[float] = None,
+    effort_ratio: Optional[float] = None,
 ) -> dict:
     """
     Calculate composite suspicion score combining multiple signals.
 
-    Score ranges (adjusted for 0-200 scale):
-    0-60:    Clean (normal player)
-    60-90:   Borderline (monitor)
-    90-120:  Suspicious (investigate)
-    120-200: Very suspicious (likely cheating)
+    Score ranges (adjusted for 0-300 scale):
+    0-80:    LOW (normal player)
+    80-130:  MODERATE (monitor)
+    130-180: HIGH (investigate)
+    180-300: VERY HIGH (likely cheating)
 
     Args:
         anomaly_score_mean: Time-complexity anomaly score (0-100)
@@ -110,10 +120,19 @@ def calculate_suspicion_score(
         opening_to_middle_improvement: ACPL drop from opening to middle (cp) - Phase 1B
         variance_drop: Std dev drop from opening to middle (cp) - Phase 1B
         post_pause_improvement: ACPL improvement after long pauses (cp) - Phase 1B
+        cwmr_delta: CWMR delta (raw_match_rate - cwmr) - Signal 14
+        cpa: Critical Position Accuracy (0-1) - Signal 15
+        sensitivity: Difficulty Sensitivity (easy_acc - hard_acc) - Signal 16
+        ubma: Unique Best Move Accuracy (0-1) - Signal 17
+        difficulty_variance_ratio: Variance ratio (easy/hard) - Signal 18
+        critical_accuracy_boost: Critical moment accuracy boost - Signal 19
+        oscillation_score: Oscillation pattern score (0-100) - Signal 20
+        mismatch_rate: Effort-quality mismatch rate (0-1) - Signal 21
+        effort_ratio: Effort ratio for human penalty
 
     Returns:
         Dict with:
-        - suspicion_score: Combined score (0-200, capped)
+        - suspicion_score: Combined score (0-300, capped)
         - confidence: Confidence level (low/medium/high)
         - signals: List of contributing factors
     """
@@ -357,6 +376,139 @@ def calculate_suspicion_score(
             score += 5
             signals.append(f"Moderate post-pause improvement ({post_pause_improvement:+.1f} cp)")
 
+    # ========== DIFFICULTY & ADVANCED DETECTION (Signals 14-21) ==========
+
+    # Signal 14: CWMR Delta (25 points max)
+    # ENGINE DETECTION: Engine accuracy is independent of position difficulty
+    # cwmr_delta < 0.03 means accuracy doesn't drop in hard positions
+    if cwmr_delta is not None:
+        data_points += 1
+        if cwmr_delta < 0.03:
+            score += 25
+            signals.append(
+                f"CWMR Delta extremely low ({cwmr_delta:.3f}) - accuracy independent of difficulty"
+            )
+        elif cwmr_delta < 0.06:
+            score += 18
+            signals.append(f"CWMR Delta very low ({cwmr_delta:.3f}) - suspiciously consistent")
+        elif cwmr_delta < 0.10:
+            score += 10
+            signals.append(f"CWMR Delta low ({cwmr_delta:.3f}) - unusually consistent")
+
+    # Signal 15: Critical Position Accuracy (20 points max)
+    # ENGINE DETECTION: Humans score 15-35% in critical positions, engines > 45%
+    if cpa is not None:
+        data_points += 1
+        if cpa > 0.55:
+            score += 20
+            signals.append(
+                f"Extremely high CPA ({cpa*100:.1f}%) - engine-like critical accuracy"
+            )
+        elif cpa > 0.45:
+            score += 15
+            signals.append(f"Very high CPA ({cpa*100:.1f}%) - suspiciously accurate in critical positions")
+        elif cpa > 0.35:
+            score += 8
+            signals.append(f"High CPA ({cpa*100:.1f}%) - above expected human range")
+
+    # Signal 16: Difficulty Sensitivity (20 points max)
+    # ENGINE DETECTION: Humans drop 0.10-0.40 in hard positions, engines < 0.05
+    if sensitivity is not None:
+        data_points += 1
+        if sensitivity < 0.05:
+            score += 20
+            signals.append(
+                f"Flat difficulty sensitivity ({sensitivity:.3f}) - no accuracy drop in hard positions"
+            )
+        elif sensitivity < 0.08:
+            score += 14
+            signals.append(f"Very low sensitivity ({sensitivity:.3f}) - minimal difficulty impact")
+        elif sensitivity < 0.12:
+            score += 7
+            signals.append(f"Low sensitivity ({sensitivity:.3f}) - unusually resilient")
+
+    # Signal 17: UBMA - Unique Best Move Accuracy (15 points max)
+    # ENGINE DETECTION: Humans score 30-55%, engines > 75%
+    if ubma is not None:
+        data_points += 1
+        if ubma > 0.80:
+            score += 15
+            signals.append(
+                f"Extremely high UBMA ({ubma*100:.1f}%) - finds unique best moves consistently"
+            )
+        elif ubma > 0.70:
+            score += 10
+            signals.append(f"Very high UBMA ({ubma*100:.1f}%) - suspiciously precise")
+        elif ubma > 0.55:
+            score += 5
+            signals.append(f"High UBMA ({ubma*100:.1f}%) - above expected range")
+
+    # Signal 18: Variance Ratio (15 points max)
+    # TOGGLE DETECTION: Perfect in hard, normal in easy → ratio > 2.0
+    if difficulty_variance_ratio is not None:
+        data_points += 1
+        if difficulty_variance_ratio > 3.0:
+            score += 15
+            signals.append(
+                f"Extreme variance ratio ({difficulty_variance_ratio:.2f}) - perfect in hard, sloppy in easy"
+            )
+        elif difficulty_variance_ratio > 2.0:
+            score += 10
+            signals.append(f"High variance ratio ({difficulty_variance_ratio:.2f}) - suspicious pattern")
+        elif difficulty_variance_ratio > 1.5:
+            score += 5
+            signals.append(f"Elevated variance ratio ({difficulty_variance_ratio:.2f})")
+
+    # Signal 19: Critical Moment Accuracy Boost (20 points max)
+    # TOGGLE DETECTION: boost > 0.15 means "turns on engine" in critical moments
+    if critical_accuracy_boost is not None:
+        data_points += 1
+        if critical_accuracy_boost > 0.25:
+            score += 20
+            signals.append(
+                f"Large critical moment boost ({critical_accuracy_boost:+.3f}) - engine activated in key moments"
+            )
+        elif critical_accuracy_boost > 0.15:
+            score += 14
+            signals.append(
+                f"Significant critical moment boost ({critical_accuracy_boost:+.3f}) - suspicious activation"
+            )
+        elif critical_accuracy_boost > 0.08:
+            score += 7
+            signals.append(f"Moderate critical moment boost ({critical_accuracy_boost:+.3f})")
+
+    # Signal 20: Oscillation Pattern (15 points max)
+    # TOGGLE DETECTION: Alternating mediocre-perfect windows correlated with difficulty
+    if oscillation_score is not None:
+        data_points += 1
+        if oscillation_score > 40:
+            score += 15
+            signals.append(
+                f"Strong oscillation pattern ({oscillation_score:.1f}/100) - alternating quality by difficulty"
+            )
+        elif oscillation_score > 25:
+            score += 10
+            signals.append(f"Moderate oscillation ({oscillation_score:.1f}/100) - suspicious pattern")
+        elif oscillation_score > 15:
+            score += 5
+            signals.append(f"Mild oscillation ({oscillation_score:.1f}/100)")
+
+    # Signal 21: Effort-Quality Mismatch (15 points max)
+    # TOGGLE DETECTION: Fast perfect moves in hard positions
+    if mismatch_rate is not None:
+        data_points += 1
+        if mismatch_rate > 0.35:
+            score += 15
+            signals.append(
+                f"High effort mismatch ({mismatch_rate*100:.1f}%) - fast perfect moves in hard positions"
+            )
+        elif mismatch_rate > 0.25:
+            score += 10
+            signals.append(f"Elevated effort mismatch ({mismatch_rate*100:.1f}%) - suspicious speed")
+        elif mismatch_rate > 0.15:
+            score += 5
+            signals.append(f"Moderate effort mismatch ({mismatch_rate*100:.1f}%)")
+
     # ========== PENALTY SIGNALS (Human-Like Patterns) ==========
     # ADDED 2025-11-15: Subtract points when strong human weaknesses are present
     # This prevents weak players from getting high suspicion scores
@@ -391,6 +543,24 @@ def calculate_suspicion_score(
             f"⬇ High blunder rate ({blunder_rate*100:.1f}%) - human pattern → -{penalty}"
         )
 
+    # Penalty 4: High Difficulty Sensitivity (>0.25)
+    # HUMAN PATTERN: Big accuracy drop in hard positions = normal human behavior
+    if sensitivity is not None and sensitivity > 0.25:
+        penalty = min(15, int((sensitivity - 0.25) * 100))
+        score -= penalty
+        signals.append(
+            f"⬇ High difficulty sensitivity ({sensitivity:.3f}) - human pattern → -{penalty}"
+        )
+
+    # Penalty 5: High Effort Ratio (>1.5)
+    # HUMAN PATTERN: Thinking much longer on correct hard moves = genuine effort
+    if effort_ratio is not None and effort_ratio > 1.5:
+        penalty = min(10, int((effort_ratio - 1.5) * 20))
+        score -= penalty
+        signals.append(
+            f"⬇ High effort ratio ({effort_ratio:.2f}) - human thinking pattern → -{penalty}"
+        )
+
     # Ensure score doesn't go negative
     score = max(0, score)
 
@@ -405,16 +575,15 @@ def calculate_suspicion_score(
     else:
         confidence = "low"
 
-    # Cap score at 200 (Phase 1B: 13 total signals)
-    score = min(200, score)
+    # Cap score at 300 (21 total signals + difficulty metrics)
+    score = min(300, score)
 
-    # Determine risk level (adjusted thresholds for 0-200 scale)
-    # Proportional adjustment: 60/100 → 120/200, 45/100 → 90/200, 30/100 → 60/200
-    if score >= 120:
+    # Determine risk level (adjusted thresholds for 0-300 scale)
+    if score >= 180:
         risk_level = "VERY HIGH"
-    elif score >= 90:
+    elif score >= 130:
         risk_level = "HIGH"
-    elif score >= 60:
+    elif score >= 80:
         risk_level = "MODERATE"
     else:
         risk_level = "LOW"

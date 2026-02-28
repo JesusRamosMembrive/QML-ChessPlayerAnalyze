@@ -24,6 +24,8 @@ from analysis import (
     calculate_time_pressure_metrics,
     calculate_topn_match_rates,
 )
+from analysis.human_impossibility import calculate_human_impossibility_metrics
+from analysis.toggle_detection import calculate_toggle_detection_metrics
 from database import GameAnalysis
 from repositories import AnalysisRepository
 from services.aggregation_service import AggregationService
@@ -320,6 +322,13 @@ class AnalysisService:
                     time_control=time_control,  # NEW
                 )
 
+            # Difficulty metrics (human impossibility + toggle detection)
+            difficulty_metrics = None
+            if player_move_evals:
+                impossibility = calculate_human_impossibility_metrics(player_move_evals)
+                toggle = calculate_toggle_detection_metrics(player_move_evals, player_times or None)
+                difficulty_metrics = {**impossibility, **toggle}
+
             return {
                 "success": True,
                 "metadata": metadata,
@@ -335,6 +344,7 @@ class AnalysisService:
                 "time_complexity": time_complexity,
                 "enhanced_phase": enhanced_phase,
                 "psychological_momentum": psychological_momentum,
+                "difficulty_metrics": difficulty_metrics,
                 "depth": self.depth,
             }
 
@@ -485,6 +495,11 @@ class AnalysisService:
                     if result["psychological_momentum"]
                     else None
                 ),
+                difficulty_metrics=(
+                    json.dumps(result["difficulty_metrics"])
+                    if result.get("difficulty_metrics")
+                    else None
+                ),
                 stockfish_depth=result["depth"],
             )
 
@@ -610,6 +625,11 @@ class AnalysisService:
                     psychological_momentum=(
                         json.dumps(result["psychological_momentum"])
                         if result["psychological_momentum"]
+                        else None
+                    ),
+                    difficulty_metrics=(
+                        json.dumps(result["difficulty_metrics"])
+                        if result.get("difficulty_metrics")
                         else None
                     ),
                     stockfish_depth=result["depth"],
@@ -808,6 +828,26 @@ def _analyze_single_game_worker(
                     time_control=time_control,  # NEW
                 )
 
+        # Difficulty metrics (human impossibility + toggle detection)
+        difficulty_metrics = None
+        if config.basic_metrics and player_move_evals:
+            from analysis.human_impossibility import calculate_human_impossibility_metrics
+            from analysis.toggle_detection import calculate_toggle_detection_metrics
+
+            impossibility = calculate_human_impossibility_metrics(player_move_evals)
+
+            # For toggle detection, pass player_times if available
+            # player_times is defined by time_complexity_correlation or psychological_momentum blocks
+            toggle_times = None
+            try:
+                if player_times:
+                    toggle_times = player_times
+            except NameError:
+                pass
+            toggle = calculate_toggle_detection_metrics(player_move_evals, toggle_times)
+
+            difficulty_metrics = {**impossibility, **toggle}
+
         result = {
             "success": True,
             "game_id": game_id,
@@ -824,6 +864,7 @@ def _analyze_single_game_worker(
             "time_complexity": time_complexity,
             "enhanced_phase": enhanced_phase,
             "psychological_momentum": psychological_momentum,
+            "difficulty_metrics": difficulty_metrics,
             "depth": depth,
         }
 

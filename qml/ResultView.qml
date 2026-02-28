@@ -13,9 +13,12 @@ Item {
     // Convenience alias
     readonly property var rd: controller.resultData
 
-    // Responsive column counts based on content width
-    readonly property int gridCols: mainContent.width > 1100 ? 4 : mainContent.width > 700 ? 3 : mainContent.width > 400 ? 2 : 1
-    readonly property int gridColsWide: mainContent.width > 1100 ? 5 : mainContent.width > 700 ? 4 : mainContent.width > 500 ? 3 : 2
+    // Auto-fill columns: repeat(auto-fill, minmax(minCellWidth, 1fr))
+    readonly property int minCellWidth: 180
+    readonly property int gridSpacing: 12
+    function autoCols(availableWidth) {
+        return Math.max(Math.floor((availableWidth + gridSpacing) / (minCellWidth + gridSpacing)), 1);
+    }
 
     // Helper to safely read from resultData
     function val(key, fallback) {
@@ -212,7 +215,7 @@ Item {
                         // Robust ACPL + Top-1 Match Rate scale bars
                         GridLayout {
                         Layout.fillWidth: true
-                        columns: root.gridCols > 1 ? 2 : 1
+                        columns: root.autoCols(width)
                         columnSpacing: 12
                         rowSpacing: 12
 
@@ -248,7 +251,7 @@ Item {
                     // Match Rate + Move Quality side by side
                     GridLayout {
                         Layout.fillWidth: true
-                        columns: root.gridCols > 1 ? 2 : 1
+                        columns: Math.min(root.autoCols(width), 2)
                         columnSpacing: 12
                         rowSpacing: 12
 
@@ -281,7 +284,7 @@ Item {
                     // Blunder Rate + ACPL Distribution
                     GridLayout {
                         Layout.fillWidth: true
-                        columns: root.gridCols > 1 ? 2 : 1
+                        columns: root.autoCols(width)
                         columnSpacing: 12
                         rowSpacing: 12
 
@@ -317,7 +320,7 @@ Item {
                         // Phase charts side by side
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols > 1 ? 2 : 1
+                            columns: Math.min(root.autoCols(width), 2)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -347,7 +350,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -416,7 +419,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols > 1 ? 2 : 1
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -459,7 +462,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols > 1 ? 2 : 1
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -495,7 +498,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -531,7 +534,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -569,7 +572,7 @@ Item {
                         // Historical charts side by side
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols > 1 ? 2 : 1
+                            columns: Math.min(root.autoCols(width), 2)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -654,7 +657,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridCols > 1 ? 2 : 1
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 
@@ -697,7 +700,7 @@ Item {
                         // Summary cards row
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.gridColsWide
+                            columns: root.autoCols(width)
                             columnSpacing: 12
                             rowSpacing: 12
 

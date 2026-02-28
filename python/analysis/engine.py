@@ -282,6 +282,31 @@ def analyze_game(
                 best_rank = idx
                 break
 
+        # Extract MultiPV evaluations for difficulty metrics
+        multipv_evals = []
+        for pv_info in info_before:
+            pv_score = pv_info["score"].white()
+            if pv_score.is_mate():
+                mate_in = pv_score.mate()
+                pv_eval = 10000 * (1 if mate_in and mate_in > 0 else -1)
+            else:
+                pv_eval = pv_score.score() or 0
+            # Convert to player's perspective if needed
+            if player_color and player_color.lower() == "black":
+                pv_eval = -pv_eval
+            multipv_evals.append(pv_eval)
+
+        # Calculate top_gap and eval_spread from MultiPV evals
+        if len(multipv_evals) >= 2:
+            top_gap = abs(multipv_evals[0] - multipv_evals[1])
+        else:
+            top_gap = 0
+
+        if len(multipv_evals) >= 2:
+            eval_spread = abs(multipv_evals[0] - multipv_evals[-1])
+        else:
+            eval_spread = 0
+
         move_evaluations.append(
             {
                 "move_number": move_num,
@@ -296,6 +321,9 @@ def analyze_game(
                 "is_capture": is_capture,
                 "improvement": improvement,
                 "material_sacrificed": material_sacrificed,
+                "multipv_evals": multipv_evals,
+                "top_gap": top_gap,
+                "eval_spread": eval_spread,
             }
         )
 

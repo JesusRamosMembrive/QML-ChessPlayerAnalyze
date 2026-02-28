@@ -278,37 +278,21 @@ def calculate_position_complexity(move_eval: dict) -> float:
     """
     Calculate position complexity for a single move.
 
-    Uses multiple indicators:
-    - Number of legal moves (more = more complex)
-    - Evaluation spread from multipv (if available)
-    - Normalized to 0-100 scale
+    .. deprecated::
+        Use :func:`analysis.difficulty.calculate_sharpness_score` instead,
+        which uses MultiPV evaluation data for a richer signal.
+
+    This wrapper delegates to the new sharpness score for backward compatibility.
 
     Args:
-        move_eval: Single move evaluation dict with 'legal_moves' and optionally 'multipv_spread'
+        move_eval: Single move evaluation dict.
 
     Returns:
-        Complexity score (0-100, higher = more complex)
+        Complexity score (0-100, higher = more complex).
     """
-    # Base complexity from legal moves
-    # Typical ranges: 20-40 legal moves
-    # Map: 0-20 -> simple, 20-40 -> medium, 40+ -> complex
-    legal_moves = move_eval.get("legal_moves", 30)  # default to medium
+    from analysis.difficulty import calculate_sharpness_score
 
-    # Normalize legal moves to 0-100 scale
-    # Use sigmoid-like function: fewer options = simpler
-    if legal_moves <= 5:
-        complexity = 10  # Very simple (endgame)
-    elif legal_moves <= 20:
-        complexity = 20 + (legal_moves - 5) * 2  # 20-50
-    elif legal_moves <= 40:
-        complexity = 50 + (legal_moves - 20) * 1.5  # 50-80
-    else:
-        complexity = min(80 + (legal_moves - 40) * 0.5, 100)  # 80-100
-
-    # Future: can add multipv spread if we store it
-    # For now, legal moves is a good proxy
-
-    return complexity
+    return calculate_sharpness_score(move_eval)
 
 
 def calculate_enhanced_phase_analysis(

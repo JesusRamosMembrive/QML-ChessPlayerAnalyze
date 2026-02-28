@@ -42,6 +42,22 @@ from .time_analysis import (
     calculate_time_pressure_metrics,
 )
 
+# Position difficulty
+from .difficulty import (
+    calculate_sharpness_score,
+    is_forced_move,
+)
+
+# Human impossibility detection
+from .human_impossibility import (
+    calculate_human_impossibility_metrics,
+)
+
+# Toggle detection
+from .toggle_detection import (
+    calculate_toggle_detection_metrics,
+)
+
 __all__ = [
     # Engine
     "analyze_game",
@@ -65,4 +81,11 @@ __all__ = [
     # Suspicion
     "calculate_precision_bursts",
     "calculate_suspicion_score",
+    # Difficulty
+    "calculate_sharpness_score",
+    "is_forced_move",
+    # Human impossibility
+    "calculate_human_impossibility_metrics",
+    # Toggle detection
+    "calculate_toggle_detection_metrics",
 ]

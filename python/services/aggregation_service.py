@@ -14,6 +14,7 @@ from database import Game, GameAnalysis, PlayerAggregate
 from repositories import AggregateRepository, AnalysisRepository, GameRepository
 from services.calculators.advanced_metrics import AdvancedMetricsCalculator
 from services.calculators.basic_stats import BasicStatsCalculator
+from services.calculators.difficulty_metrics import DifficultyMetricsCalculator
 from services.calculators.historical import HistoricalCalculator
 from services.calculators.phase_1b_metrics import Phase1BMetricsCalculator
 from services.calculators.phase_metrics import PhaseMetricsCalculator
@@ -36,6 +37,47 @@ class AggregationService:
     - Calculate composite suspicion score from aggregated metrics
     - Save/update PlayerAggregate records
     """
+
+    METRIC_GROUP_KEYS = {
+        "basic": [
+            "acpl_mean", "acpl_median", "acpl_std", "acpl_min", "acpl_max",
+            "acpl_p25", "acpl_p75",
+            "top1_match_rate_mean", "top1_match_rate_std", "top1_match_rate_min", "top1_match_rate_max",
+            "top2_match_rate_mean", "top2_match_rate_std", "top2_match_rate_min", "top2_match_rate_max",
+            "top3_match_rate_mean", "top3_match_rate_std", "top3_match_rate_min", "top3_match_rate_max",
+            "top4_match_rate_mean", "top4_match_rate_std", "top4_match_rate_min", "top4_match_rate_max",
+            "top5_match_rate_mean", "top5_match_rate_std", "top5_match_rate_min", "top5_match_rate_max",
+            "blunder_rate_mean", "blunder_rate_std",
+            "move_count_mean", "move_count_median",
+        ],
+        "advanced": [
+            "robust_acpl", "rank_0_mean", "rank_1_mean", "rank_2_mean", "rank_3plus_mean",
+        ],
+        "precision": [
+            "precision_burst_mean", "longest_burst_mean", "precision_rate_mean",
+        ],
+        "phase": [
+            "opening_to_middle_transition", "middle_to_endgame_transition",
+            "collapse_rate",
+            "phase_consistency_opening", "phase_consistency_middle", "phase_consistency_endgame",
+        ],
+        "time": [
+            "time_complexity_correlation", "anomaly_score_mean",
+        ],
+        "psych": [
+            "tilt_rate", "recovery_rate", "closing_acpl", "pressure_degradation",
+        ],
+        "phase_1b": [
+            "opening_to_middle_improvement", "variance_drop", "post_pause_improvement",
+        ],
+        "difficulty": [
+            "cwmr_mean", "cwmr_delta_mean", "cpa_mean", "sensitivity_mean", "ubma_mean",
+            "variance_ratio_mean", "critical_accuracy_boost_mean", "oscillation_score_mean",
+            "mismatch_rate_mean", "effort_ratio_mean", "avg_sharpness_mean",
+        ],
+    }
+
+    HISTORICAL_KEYS = ["acpl_timeline", "match_rate_timeline", "elo_timeline", "games_count"]
 
     def __init__(self, session: Session):
         """
@@ -60,6 +102,7 @@ class AggregationService:
         self.calculator_registry.register(TimeMetricsCalculator())
         self.calculator_registry.register(PsychologicalCalculator())
         self.calculator_registry.register(Phase1BMetricsCalculator())
+        self.calculator_registry.register(DifficultyMetricsCalculator())
         self.calculator_registry.register(HistoricalCalculator(max_games=50))
 
     def recalculate_aggregates(
@@ -250,125 +293,12 @@ class AggregationService:
         # Calculate all metrics using registry (replaces 750+ LOC of individual methods)
         all_metrics = self.calculator_registry.calculate_all(items)
 
-        # Separate metrics by category for database persistence and suspicion calculation
-        basic_stats = {
-            k: all_metrics[k]
-            for k in [
-                "acpl_mean",
-                "acpl_median",
-                "acpl_std",
-                "acpl_min",
-                "acpl_max",
-                "acpl_p25",
-                "acpl_p75",
-                "top1_match_rate_mean",
-                "top1_match_rate_std",
-                "top1_match_rate_min",
-                "top1_match_rate_max",
-                "top2_match_rate_mean",
-                "top2_match_rate_std",
-                "top2_match_rate_min",
-                "top2_match_rate_max",
-                "top3_match_rate_mean",
-                "top3_match_rate_std",
-                "top3_match_rate_min",
-                "top3_match_rate_max",
-                "top4_match_rate_mean",
-                "top4_match_rate_std",
-                "top4_match_rate_min",
-                "top4_match_rate_max",
-                "top5_match_rate_mean",
-                "top5_match_rate_std",
-                "top5_match_rate_min",
-                "top5_match_rate_max",
-                "blunder_rate_mean",
-                "blunder_rate_std",
-                "move_count_mean",
-                "move_count_median",
-            ]
-            if k in all_metrics
-        }
-
-        advanced_stats = {
-            k: all_metrics[k]
-            for k in [
-                "robust_acpl",
-                "rank_0_mean",
-                "rank_1_mean",
-                "rank_2_mean",
-                "rank_3plus_mean",
-            ]
-            if k in all_metrics
-        }
-
-        precision_stats = {
-            k: all_metrics[k]
-            for k in [
-                "precision_burst_mean",
-                "longest_burst_mean",
-                "precision_rate_mean",
-            ]
-            if k in all_metrics
-        }
-
-        phase_stats = {
-            k: all_metrics[k]
-            for k in [
-                "opening_to_middle_transition",
-                "middle_to_endgame_transition",
-                "collapse_rate",
-                "phase_consistency_opening",
-                "phase_consistency_middle",
-                "phase_consistency_endgame",
-            ]
-            if k in all_metrics
-        }
-
-        time_stats = {
-            k: all_metrics[k]
-            for k in [
-                "time_complexity_correlation",
-                "anomaly_score_mean",
-            ]
-            if k in all_metrics
-        }
-
-        psych_stats = {
-            k: all_metrics[k]
-            for k in [
-                "tilt_rate",
-                "recovery_rate",
-                "closing_acpl",
-                "pressure_degradation",
-            ]
-            if k in all_metrics
-        }
-
-        phase_1b_stats = {
-            k: all_metrics[k]
-            for k in [
-                "opening_to_middle_improvement",
-                "variance_drop",
-                "post_pause_improvement",
-            ]
-            if k in all_metrics
-        }
-
-        historical_data = {
-            k: all_metrics[k]
-            for k in [
-                "acpl_timeline",
-                "match_rate_timeline",
-                "elo_timeline",
-                "games_count",
-            ]
-            if k in all_metrics
-        }
+        # Extract metric groups and historical data
+        groups = self._extract_metric_groups(all_metrics)
+        historical_data = {k: all_metrics[k] for k in self.HISTORICAL_KEYS if k in all_metrics}
 
         # Calculate suspicion score (orchestration logic - integrates calculator results)
-        suspicion_score = self._calculate_suspicion_score(
-            advanced_stats, basic_stats, phase_stats, time_stats, psych_stats, phase_1b_stats
-        )
+        suspicion_score = self._calculate_suspicion_score(groups)
 
         # Date range
         dates = [item["game"].date for item in items]
@@ -377,68 +307,48 @@ class AggregationService:
 
         # Save or update aggregate
         return self._save_or_update_aggregate(
-            username,
-            category,
-            len(items),
-            basic_stats,
-            advanced_stats,
-            precision_stats,
-            phase_stats,
-            time_stats,
-            psych_stats,
-            historical_data,
-            suspicion_score,
-            first_game_date,
-            last_game_date,
-            window_analysis,
-            window_id,
-            window_range,
+            username, category, len(items), groups, historical_data,
+            suspicion_score, first_game_date, last_game_date,
+            window_analysis, window_id, window_range,
         )
 
-    def _calculate_suspicion_score(
-        self,
-        advanced_stats: dict,
-        basic_stats: dict,
-        phase_stats: dict,
-        time_stats: dict,
-        psych_stats: dict,
-        phase_1b_stats: dict,
-    ) -> float:
-        """Calculate composite suspicion score."""
+    def _calculate_suspicion_score(self, groups: dict[str, dict]) -> float:
+        """Calculate composite suspicion score from metric groups."""
+        basic = groups.get("basic", {})
+        advanced = groups.get("advanced", {})
+        phase = groups.get("phase", {})
+        time = groups.get("time", {})
+        psych = groups.get("psych", {})
+        phase_1b = groups.get("phase_1b", {})
+        difficulty = groups.get("difficulty", {})
+
         try:
-            # Extract required values with defaults
-            anomaly_score_mean = time_stats.get(
-                "anomaly_score_mean"
-            )  # Signal 1: Time-Complexity Anomaly
-            opening_to_middle = phase_stats.get("opening_to_middle_transition")
-            collapse_rate = phase_stats.get("collapse_rate")
-            phase_consistency = phase_stats.get("phase_consistency_middle")
-            robust_acpl = advanced_stats.get("robust_acpl")
-
             suspicion_result = calculate_suspicion_score(
-                anomaly_score_mean=anomaly_score_mean,
-                opening_to_middle_transition=opening_to_middle,
-                collapse_rate=collapse_rate,
-                phase_consistency_middle=phase_consistency,
-                robust_acpl=robust_acpl,
-                match_rate_mean=basic_stats.get(
-                    "top5_match_rate_mean"
-                ),  # Fixed: was top1, now top5 (2.45% error vs Chess.com)
-                # Phase 1A: Add new signals from already-calculated metrics
-                blunder_rate=basic_stats.get("blunder_rate_mean"),
-                top2_match_rate=basic_stats.get("top2_match_rate_mean"),
-                pressure_degradation=psych_stats.get("pressure_degradation"),
-                tilt_rate=psych_stats.get("tilt_rate"),
-                # Phase 1B: Advanced temporal detection signals
-                opening_to_middle_improvement=phase_1b_stats.get("opening_to_middle_improvement"),
-                variance_drop=phase_1b_stats.get("variance_drop"),
-                post_pause_improvement=phase_1b_stats.get("post_pause_improvement"),
+                anomaly_score_mean=time.get("anomaly_score_mean"),
+                opening_to_middle_transition=phase.get("opening_to_middle_transition"),
+                collapse_rate=phase.get("collapse_rate"),
+                phase_consistency_middle=phase.get("phase_consistency_middle"),
+                robust_acpl=advanced.get("robust_acpl"),
+                match_rate_mean=basic.get("top5_match_rate_mean"),
+                blunder_rate=basic.get("blunder_rate_mean"),
+                top2_match_rate=basic.get("top2_match_rate_mean"),
+                pressure_degradation=psych.get("pressure_degradation"),
+                tilt_rate=psych.get("tilt_rate"),
+                opening_to_middle_improvement=phase_1b.get("opening_to_middle_improvement"),
+                variance_drop=phase_1b.get("variance_drop"),
+                post_pause_improvement=phase_1b.get("post_pause_improvement"),
+                cwmr_delta=difficulty.get("cwmr_delta_mean"),
+                cpa=difficulty.get("cpa_mean"),
+                sensitivity=difficulty.get("sensitivity_mean"),
+                ubma=difficulty.get("ubma_mean"),
+                difficulty_variance_ratio=difficulty.get("variance_ratio_mean"),
+                critical_accuracy_boost=difficulty.get("critical_accuracy_boost_mean"),
+                oscillation_score=difficulty.get("oscillation_score_mean"),
+                mismatch_rate=difficulty.get("mismatch_rate_mean"),
+                effort_ratio=difficulty.get("effort_ratio_mean"),
             )
-
             return suspicion_result["suspicion_score"]
-
         except Exception:
-            # If suspicion calculation fails, return neutral score
             return 0.0
 
     def _save_or_update_aggregate(
@@ -446,12 +356,7 @@ class AggregationService:
         username: str,
         category: str,
         games_count: int,
-        basic_stats: dict,
-        advanced_stats: dict,
-        precision_stats: dict,
-        phase_stats: dict,
-        time_stats: dict,
-        psych_stats: dict,
+        groups: dict[str, dict],
         historical_data: dict,
         suspicion_score: float,
         first_game_date: datetime,
@@ -461,38 +366,25 @@ class AggregationService:
         window_range: tuple[int, int] | None = None,
     ) -> PlayerAggregate:
         """Save or update PlayerAggregate record."""
-        # Check for existing record
         existing = self.aggregate_repo.get_by_username_and_time_control(username, category, window_id)
 
         if existing:
-            # Update existing
             self._update_aggregate_fields(
-                existing,
-                games_count,
-                basic_stats,
-                advanced_stats,
-                precision_stats,
-                phase_stats,
-                time_stats,
-                psych_stats,
-                historical_data,
-                suspicion_score,
-                first_game_date,
-                last_game_date,
-                window_analysis,
-                window_range,
+                existing, games_count, groups, historical_data,
+                suspicion_score, first_game_date, last_game_date,
+                window_analysis, window_range,
             )
             return self.aggregate_repo.update(existing)
         else:
-            # Filter out None values from optional stats to avoid SQLModel errors
-            # (some fields in PlayerAggregate don't allow None)
-            clean_advanced_stats = {k: v for k, v in advanced_stats.items() if v is not None}
-            clean_precision_stats = {k: v for k, v in precision_stats.items() if v is not None}
-            clean_phase_stats = {k: v for k, v in phase_stats.items() if v is not None}
-            clean_time_stats = {k: v for k, v in time_stats.items() if v is not None}
-            clean_psych_stats = {k: v for k, v in psych_stats.items() if v is not None}
+            # Merge all group stats, filtering None values for optional fields
+            # basic group is always fully populated; other groups may have None values
+            all_stats = {}
+            for group_name, group_stats in groups.items():
+                if group_name == "basic":
+                    all_stats.update(group_stats)
+                else:
+                    all_stats.update({k: v for k, v in group_stats.items() if v is not None})
 
-            # Create new
             aggregate = PlayerAggregate(
                 username=username,
                 time_control_category=category,
@@ -500,12 +392,7 @@ class AggregationService:
                 window_start_game=window_range[0] if window_range else None,
                 window_end_game=window_range[1] if window_range else None,
                 games_count=games_count,
-                **basic_stats,
-                **clean_advanced_stats,
-                **clean_precision_stats,
-                **clean_phase_stats,
-                **clean_time_stats,
-                **clean_psych_stats,
+                **all_stats,
                 historical_data=json.dumps(historical_data),
                 window_analysis=json.dumps(window_analysis) if window_analysis else None,
                 suspicion_score=suspicion_score,
@@ -518,12 +405,7 @@ class AggregationService:
         self,
         aggregate: PlayerAggregate,
         games_count: int,
-        basic_stats: dict,
-        advanced_stats: dict,
-        precision_stats: dict,
-        phase_stats: dict,
-        time_stats: dict,
-        psych_stats: dict,
+        groups: dict[str, dict],
         historical_data: dict,
         suspicion_score: float,
         first_game_date: datetime,
@@ -534,24 +416,13 @@ class AggregationService:
         """Update fields on existing PlayerAggregate."""
         aggregate.games_count = games_count
 
-        # Update window range if provided
         if window_range:
             aggregate.window_start_game = window_range[0]
             aggregate.window_end_game = window_range[1]
 
-        # Update all stats
-        for key, value in basic_stats.items():
-            setattr(aggregate, key, value)
-        for key, value in advanced_stats.items():
-            setattr(aggregate, key, value)
-        for key, value in precision_stats.items():
-            setattr(aggregate, key, value)
-        for key, value in phase_stats.items():
-            setattr(aggregate, key, value)
-        for key, value in time_stats.items():
-            setattr(aggregate, key, value)
-        for key, value in psych_stats.items():
-            setattr(aggregate, key, value)
+        for group_stats in groups.values():
+            for key, value in group_stats.items():
+                setattr(aggregate, key, value)
 
         aggregate.historical_data = json.dumps(historical_data)
         aggregate.window_analysis = json.dumps(window_analysis) if window_analysis else None
@@ -851,15 +722,18 @@ class AggregationService:
             # Calculate metrics for this window
             window_metrics = self.calculator_registry.calculate_all(window_items)
 
-            # Extract metric groups (same structure as global aggregate)
-            basic_stats, advanced_stats, precision_stats, phase_stats, time_stats, psych_stats, phase_1b_stats = (
-                self._extract_metric_groups(window_metrics)
-            )
+            # Extract metric groups
+            groups = self._extract_metric_groups(window_metrics)
+            basic = groups.get("basic", {})
+            precision = groups.get("precision", {})
+            time_g = groups.get("time", {})
+            phase = groups.get("phase", {})
+            psych = groups.get("psych", {})
+            phase_1b = groups.get("phase_1b", {})
+            difficulty = groups.get("difficulty", {})
 
             # Calculate suspicion score for THIS WINDOW ONLY (not averaged!)
-            window_suspicion_score = self._calculate_suspicion_score(
-                advanced_stats, basic_stats, phase_stats, time_stats, psych_stats, phase_1b_stats
-            )
+            window_suspicion_score = self._calculate_suspicion_score(groups)
 
             # Track max score across all windows
             max_suspicion_score = max(max_suspicion_score, window_suspicion_score)
@@ -875,60 +749,67 @@ class AggregationService:
                 "games_count": len(window_items),
                 "basic_info": {
                     "games_count": len(window_items),
-                    "move_count_mean": basic_stats.get("move_count_mean", 0.0),
-                    "move_count_median": basic_stats.get("move_count_median", 0.0),
+                    "move_count_mean": basic.get("move_count_mean", 0.0),
+                    "move_count_median": basic.get("move_count_median", 0.0),
                     "first_game_date": first_date.isoformat(),
                     "last_game_date": last_date.isoformat(),
                 },
                 "quality_metrics": {
-                    "acpl_mean": basic_stats.get("acpl_mean", 0.0),
-                    "acpl_median": basic_stats.get("acpl_median", 0.0),
-                    "acpl_std": basic_stats.get("acpl_std", 0.0),
+                    "acpl_mean": basic.get("acpl_mean", 0.0),
+                    "acpl_median": basic.get("acpl_median", 0.0),
+                    "acpl_std": basic.get("acpl_std", 0.0),
                 },
                 "move_quality": {
-                    "top1_match_rate_mean": basic_stats.get("top1_match_rate_mean", 0.0),
-                    "top5_match_rate_mean": basic_stats.get("top5_match_rate_mean", 0.0),
-                    "blunder_rate_mean": basic_stats.get("blunder_rate_mean", 0.0),
+                    "top1_match_rate_mean": basic.get("top1_match_rate_mean", 0.0),
+                    "top5_match_rate_mean": basic.get("top5_match_rate_mean", 0.0),
+                    "blunder_rate_mean": basic.get("blunder_rate_mean", 0.0),
                 },
                 "precision_analysis": {
-                    "precision_burst_mean": precision_stats.get("precision_burst_mean", 0.0),
-                    "longest_burst_mean": precision_stats.get("longest_burst_mean", 0.0),
-                    "precision_rate_mean": precision_stats.get("precision_rate_mean", 0.0),
+                    "precision_burst_mean": precision.get("precision_burst_mean", 0.0),
+                    "longest_burst_mean": precision.get("longest_burst_mean", 0.0),
+                    "precision_rate_mean": precision.get("precision_rate_mean", 0.0),
                 },
                 "time_complexity": {
-                    "time_complexity_correlation": time_stats.get(
-                        "time_complexity_correlation", 0.0
-                    ),
-                    "anomaly_score_mean": time_stats.get("anomaly_score_mean", 0.0),
+                    "time_complexity_correlation": time_g.get("time_complexity_correlation", 0.0),
+                    "anomaly_score_mean": time_g.get("anomaly_score_mean", 0.0),
                 },
                 "phase_analysis": {
-                    "opening_to_middle_transition": phase_stats.get(
-                        "opening_to_middle_transition", 0.0
-                    ),
-                    "middle_to_endgame_transition": phase_stats.get(
-                        "middle_to_endgame_transition", 0.0
-                    ),
-                    "collapse_rate": phase_stats.get("collapse_rate", 0.0),
+                    "opening_to_middle_transition": phase.get("opening_to_middle_transition", 0.0),
+                    "middle_to_endgame_transition": phase.get("middle_to_endgame_transition", 0.0),
+                    "collapse_rate": phase.get("collapse_rate", 0.0),
                 },
                 "suspicion": {
                     "score": window_suspicion_score,
                     "risk_level": self._get_risk_level(window_suspicion_score),
                 },
                 "psychological": {
-                    "tilt_rate": psych_stats.get("tilt_rate", 0.0),
-                    "recovery_rate": psych_stats.get("recovery_rate", 0.0),
-                    "closing_acpl": psych_stats.get("closing_acpl", 0.0),
-                    "pressure_degradation": psych_stats.get("pressure_degradation", 0.0),
+                    "tilt_rate": psych.get("tilt_rate", 0.0),
+                    "recovery_rate": psych.get("recovery_rate", 0.0),
+                    "closing_acpl": psych.get("closing_acpl", 0.0),
+                    "pressure_degradation": psych.get("pressure_degradation", 0.0),
                 },
                 "temporal_detection": (
                     {
-                        "opening_to_middle_improvement": phase_1b_stats.get(
-                            "opening_to_middle_improvement"
-                        ),
-                        "variance_drop": phase_1b_stats.get("variance_drop"),
-                        "post_pause_improvement": phase_1b_stats.get("post_pause_improvement"),
+                        "opening_to_middle_improvement": phase_1b.get("opening_to_middle_improvement"),
+                        "variance_drop": phase_1b.get("variance_drop"),
+                        "post_pause_improvement": phase_1b.get("post_pause_improvement"),
                     }
-                    if any(phase_1b_stats.values())
+                    if any(phase_1b.values())
+                    else None
+                ),
+                "difficulty_metrics": (
+                    {
+                        "cwmr_delta": difficulty.get("cwmr_delta_mean"),
+                        "cpa": difficulty.get("cpa_mean"),
+                        "sensitivity": difficulty.get("sensitivity_mean"),
+                        "ubma": difficulty.get("ubma_mean"),
+                        "variance_ratio": difficulty.get("variance_ratio_mean"),
+                        "critical_accuracy_boost": difficulty.get("critical_accuracy_boost_mean"),
+                        "oscillation_score": difficulty.get("oscillation_score_mean"),
+                        "mismatch_rate": difficulty.get("mismatch_rate_mean"),
+                        "avg_sharpness": difficulty.get("avg_sharpness_mean"),
+                    }
+                    if any(v is not None for v in difficulty.values())
                     else None
                 ),
             }
@@ -956,174 +837,43 @@ class AggregationService:
         # Use global metrics for the aggregate (for historical continuity)
         # but suspicion_score reflects the max window score
         all_metrics = self.calculator_registry.calculate_all(items)
-        basic_stats, advanced_stats, precision_stats, phase_stats, time_stats, psych_stats, _ = (
-            self._extract_metric_groups(all_metrics)
-        )
-
-        historical_data = {
-            k: all_metrics[k]
-            for k in ["acpl_timeline", "match_rate_timeline", "elo_timeline", "games_count"]
-            if k in all_metrics
-        }
+        groups = self._extract_metric_groups(all_metrics)
+        historical_data = {k: all_metrics[k] for k in self.HISTORICAL_KEYS if k in all_metrics}
 
         # Save with enhanced window analysis and max suspicion score
         return self._save_or_update_aggregate(
-            username,
-            category,
-            len(items),
-            basic_stats,
-            advanced_stats,
-            precision_stats,
-            phase_stats,
-            time_stats,
-            psych_stats,
-            historical_data,
-            max_suspicion_score,  # Use max window score as aggregate score
-            first_game_date,
-            last_game_date,
-            enhanced_window_analysis,
-            window_id,
-            window_range,
+            username, category, len(items), groups, historical_data,
+            max_suspicion_score, first_game_date, last_game_date,
+            enhanced_window_analysis, window_id, window_range,
         )
 
-    def _extract_metric_groups(self, metrics: dict) -> tuple:
+    def _extract_metric_groups(self, metrics: dict) -> dict[str, dict]:
         """
-        Extract and organize metrics into groups for suspicion calculation.
+        Extract and organize metrics into named groups.
 
         Returns:
-            Tuple of (basic_stats, advanced_stats, precision_stats, phase_stats,
-                     time_stats, psych_stats, phase_1b_stats)
+            Dict mapping group name -> {metric_key: value} for keys present in metrics.
         """
-        basic_stats = {
-            k: metrics[k]
-            for k in [
-                "acpl_mean",
-                "acpl_median",
-                "acpl_std",
-                "acpl_min",
-                "acpl_max",
-                "acpl_p25",
-                "acpl_p75",
-                "top1_match_rate_mean",
-                "top1_match_rate_std",
-                "top1_match_rate_min",
-                "top1_match_rate_max",
-                "top2_match_rate_mean",
-                "top2_match_rate_std",
-                "top2_match_rate_min",
-                "top2_match_rate_max",
-                "top3_match_rate_mean",
-                "top3_match_rate_std",
-                "top3_match_rate_min",
-                "top3_match_rate_max",
-                "top4_match_rate_mean",
-                "top4_match_rate_std",
-                "top4_match_rate_min",
-                "top4_match_rate_max",
-                "top5_match_rate_mean",
-                "top5_match_rate_std",
-                "top5_match_rate_min",
-                "top5_match_rate_max",
-                "blunder_rate_mean",
-                "blunder_rate_std",
-                "move_count_mean",
-                "move_count_median",
-            ]
-            if k in metrics
+        return {
+            group: {k: metrics[k] for k in keys if k in metrics}
+            for group, keys in self.METRIC_GROUP_KEYS.items()
         }
-
-        advanced_stats = {
-            k: metrics[k]
-            for k in [
-                "robust_acpl",
-                "rank_0_mean",
-                "rank_1_mean",
-                "rank_2_mean",
-                "rank_3plus_mean",
-            ]
-            if k in metrics
-        }
-
-        precision_stats = {
-            k: metrics[k]
-            for k in [
-                "precision_burst_mean",
-                "longest_burst_mean",
-                "precision_rate_mean",
-            ]
-            if k in metrics
-        }
-
-        phase_stats = {
-            k: metrics[k]
-            for k in [
-                "opening_to_middle_transition",
-                "middle_to_endgame_transition",
-                "collapse_rate",
-                "phase_consistency_opening",
-                "phase_consistency_middle",
-                "phase_consistency_endgame",
-            ]
-            if k in metrics
-        }
-
-        time_stats = {
-            k: metrics[k]
-            for k in [
-                "time_complexity_correlation",
-                "anomaly_score_mean",
-            ]
-            if k in metrics
-        }
-
-        psych_stats = {
-            k: metrics[k]
-            for k in [
-                "tilt_rate",
-                "recovery_rate",
-                "closing_acpl",
-                "pressure_degradation",
-            ]
-            if k in metrics
-        }
-
-        phase_1b_stats = {
-            k: metrics[k]
-            for k in [
-                "opening_to_middle_improvement",
-                "variance_drop",
-                "post_pause_improvement",
-            ]
-            if k in metrics
-        }
-
-        return (
-            basic_stats,
-            advanced_stats,
-            precision_stats,
-            phase_stats,
-            time_stats,
-            psych_stats,
-            phase_1b_stats,
-        )
 
     def _get_risk_level(self, suspicion_score: float) -> str:
         """
         Get risk level label for suspicion score.
 
         Args:
-            suspicion_score: Suspicion score (0-300+)
+            suspicion_score: Suspicion score (0-300)
 
         Returns:
             Risk level string
         """
-        if suspicion_score < 50:
-            return "CLEAN"
-        elif suspicion_score < 100:
+        if suspicion_score < 80:
             return "LOW"
-        elif suspicion_score < 150:
+        elif suspicion_score < 130:
             return "MODERATE"
-        elif suspicion_score < 200:
+        elif suspicion_score < 180:
             return "HIGH"
         else:
             return "VERY HIGH"
