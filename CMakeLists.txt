@@ -29,6 +29,12 @@ qt_add_qml_module(appChessAnalyzerQML
         qml/PlayerCard.qml
         qml/AnalysisOptionsDialog.qml
         qml/MetricCard.qml
+        qml/SimpleBarChart.qml
+        qml/DonutChart.qml
+        qml/ScaleBar.qml
+        qml/SignalsList.qml
+        qml/LineChart.qml
+        qml/RadarChart.qml
         qml/Theme.qml
 )
 

@@ -44,6 +44,7 @@ double AnalysisController::acplMean() const { return m_acplMean; }
 int AnalysisController::gamesCount() const { return m_gamesCount; }
 double AnalysisController::top1MatchRate() const { return m_top1MatchRate; }
 double AnalysisController::blunderRate() const { return m_blunderRate; }
+QVariantMap AnalysisController::resultData() const { return m_resultData; }
 
 // ── Helpers ──
 
@@ -200,6 +201,7 @@ void AnalysisController::startAnalysis(const QString &username, int games,
     m_gamesCount = 0;
     m_top1MatchRate = 0.0;
     m_blunderRate = 0.0;
+    m_resultData.clear();
     m_errorMessage.clear();
     m_outputBuffer.clear();
 
@@ -273,6 +275,7 @@ void AnalysisController::reset()
     m_gamesCount = 0;
     m_top1MatchRate = 0.0;
     m_blunderRate = 0.0;
+    m_resultData.clear();
 
     setProgress(0.0);
     setProgressText({});
@@ -354,6 +357,7 @@ void AnalysisController::processJsonLine(const QByteArray &line)
         m_gamesCount = obj.value("games_count").toInt();
         m_top1MatchRate = obj.value("top1_match_rate").toDouble();
         m_blunderRate = obj.value("blunder_rate").toDouble();
+        m_resultData = obj.toVariantMap();
         setProgress(1.0);
         setProgressText(QStringLiteral("Analysis complete"));
         emit resultReady();

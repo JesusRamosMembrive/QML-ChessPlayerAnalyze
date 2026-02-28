@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QProcess>
 #include <QQmlEngine>
+#include <QVariantMap>
 
 class AnalysisController : public QObject
 {
@@ -30,6 +31,7 @@ class AnalysisController : public QObject
     Q_PROPERTY(int gamesCount READ gamesCount NOTIFY resultReady)
     Q_PROPERTY(double top1MatchRate READ top1MatchRate NOTIFY resultReady)
     Q_PROPERTY(double blunderRate READ blunderRate NOTIFY resultReady)
+    Q_PROPERTY(QVariantMap resultData READ resultData NOTIFY resultReady)
 
 public:
     explicit AnalysisController(QObject *parent = nullptr);
@@ -56,6 +58,7 @@ public:
     int gamesCount() const;
     double top1MatchRate() const;
     double blunderRate() const;
+    QVariantMap resultData() const;
 
     Q_INVOKABLE void checkPlayer(const QString &username);
     Q_INVOKABLE void startAnalysis(const QString &username, int games = 50,
@@ -117,6 +120,7 @@ private:
     int m_gamesCount = 0;
     double m_top1MatchRate = 0.0;
     double m_blunderRate = 0.0;
+    QVariantMap m_resultData;
 };
 
 #endif // ANALYSISCONTROLLER_H
