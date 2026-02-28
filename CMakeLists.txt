@@ -18,12 +18,16 @@ qt_add_executable(appChessAnalyzerQML
     src/Settings.cpp
 )
 
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(appChessAnalyzerQML
     URI ChessAnalyzerQML
     QML_FILES
         qml/Main.qml
         qml/SearchView.qml
         qml/ResultView.qml
+        qml/MetricCard.qml
+        qml/Theme.qml
 )
 
 set_target_properties(appChessAnalyzerQML PROPERTIES

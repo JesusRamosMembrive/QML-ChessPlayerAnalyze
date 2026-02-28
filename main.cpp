@@ -4,7 +4,7 @@
 
 int main(int argc, char *argv[])
 {
-    QQuickStyle::setStyle(QStringLiteral("Material"));
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     QGuiApplication app(argc, argv);
 

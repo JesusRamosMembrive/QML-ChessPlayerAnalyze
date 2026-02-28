@@ -1,12 +1,10 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
+import ChessAnalyzerQML
 
 Item {
     id: root
-
-    Material.theme: Material.Dark
 
     required property var controller
 
@@ -20,20 +18,19 @@ Item {
         // Title
         Label {
             text: "Chess Player Analyzer"
-            font.pixelSize: 28
+            font.pixelSize: Theme.fontTitle
             font.weight: Font.Bold
             Layout.alignment: Qt.AlignHCenter
-            color: "#1a1a2e"
+            color: Theme.textPrimary
         }
 
         Label {
             text: "Analyze Chess.com players for suspicious patterns"
             font.pixelSize: 14
             Layout.alignment: Qt.AlignHCenter
-            color: "#666666"
+            color: Theme.textSecondary
         }
 
-        // Spacer
         Item { Layout.preferredHeight: 8 }
 
         // Username input
@@ -43,22 +40,24 @@ Item {
 
             Label {
                 text: "Chess.com Username"
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontLabel
                 font.weight: Font.Medium
-                color: "#333333"
+                color: Theme.textSecondary
             }
 
             TextField {
                 id: usernameField
                 placeholderText: "e.g. hikaru"
-                font.pixelSize: 15
+                placeholderTextColor: Theme.textDisabled
+                font.pixelSize: Theme.fontBody
+                color: Theme.textPrimary
                 Layout.fillWidth: true
                 enabled: !root.controller.isAnalyzing
 
                 background: Rectangle {
-                    radius: 8
-                    color: usernameField.enabled ? "#fff" : "#f5f5f5"
-                    border.color: usernameField.activeFocus ? "#4a90d9" : "#ddd"
+                    radius: Theme.radius
+                    color: usernameField.enabled ? Theme.inputBackground : Theme.inputDisabled
+                    border.color: usernameField.activeFocus ? Theme.inputFocusBorder : Theme.inputBorder
                     border.width: usernameField.activeFocus ? 2 : 1
                 }
 
@@ -82,9 +81,9 @@ Item {
 
             Label {
                 text: "Games to analyze: " + gamesSlider.value
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontLabel
                 font.weight: Font.Medium
-                color: "#333333"
+                color: Theme.textSecondary
             }
 
             Slider {
@@ -95,15 +94,42 @@ Item {
                 value: 50
                 Layout.fillWidth: true
                 enabled: !root.controller.isAnalyzing
+
+                background: Rectangle {
+                    x: gamesSlider.leftPadding
+                    y: gamesSlider.topPadding + gamesSlider.availableHeight / 2 - height / 2
+                    width: gamesSlider.availableWidth
+                    height: 4
+                    radius: 2
+                    color: Theme.progressTrack
+
+                    Rectangle {
+                        width: gamesSlider.visualPosition * parent.width
+                        height: parent.height
+                        radius: 2
+                        color: Theme.accent
+                    }
+                }
+
+                handle: Rectangle {
+                    x: gamesSlider.leftPadding + gamesSlider.visualPosition * (gamesSlider.availableWidth - width)
+                    y: gamesSlider.topPadding + gamesSlider.availableHeight / 2 - height / 2
+                    width: 18
+                    height: 18
+                    radius: 9
+                    color: gamesSlider.pressed ? Theme.accentHover : Theme.accent
+                    border.color: Theme.accentHover
+                    border.width: 1
+                }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "10"; font.pixelSize: 11; color: "#999999" }
+                Label { text: "10";  font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
                 Item { Layout.fillWidth: true }
-                Label { text: "100"; font.pixelSize: 11; color: "#999999" }
+                Label { text: "100"; font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
                 Item { Layout.fillWidth: true }
-                Label { text: "200"; font.pixelSize: 11; color: "#999999" }
+                Label { text: "200"; font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
             }
         }
 
@@ -120,17 +146,17 @@ Item {
             contentItem: Label {
                 text: analyzeButton.text
                 font: analyzeButton.font
-                color: "#ffffff"
+                color: Theme.textOnAccent
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
 
             background: Rectangle {
-                radius: 8
+                radius: Theme.radius
                 color: {
-                    if (!analyzeButton.enabled) return "#cccccc"
-                    if (root.controller.isAnalyzing) return analyzeButton.hovered ? "#c0392b" : "#e74c3c"
-                    return analyzeButton.hovered ? "#357abd" : "#4a90d9"
+                    if (!analyzeButton.enabled) return Theme.textDisabled
+                    if (root.controller.isAnalyzing) return analyzeButton.hovered ? Theme.buttonDangerHover : Theme.buttonDanger
+                    return analyzeButton.hovered ? Theme.accentHover : Theme.accent
                 }
             }
 
@@ -151,6 +177,7 @@ Item {
 
             ProgressBar {
                 id: progressBar
+                clip:true
                 from: 0
                 to: 1
                 value: root.controller.progress
@@ -160,7 +187,7 @@ Item {
                 background: Rectangle {
                     implicitHeight: 6
                     radius: 3
-                    color: "#e0e0e0"
+                    color: Theme.progressTrack
                 }
 
                 contentItem: Item {
@@ -170,17 +197,16 @@ Item {
                         width: progressBar.visualPosition * parent.width
                         height: parent.height
                         radius: 3
-                        color: "#4a90d9"
+                        color: Theme.progressFill
                         visible: !progressBar.indeterminate
                     }
 
-                    // Indeterminate animation
                     Rectangle {
                         id: indeterminateBar
                         width: parent.width * 0.3
                         height: parent.height
                         radius: 3
-                        color: "#4a90d9"
+                        color: Theme.progressFill
                         visible: progressBar.indeterminate
 
                         SequentialAnimation on x {
@@ -199,8 +225,8 @@ Item {
 
             Label {
                 text: root.controller.progressText
-                font.pixelSize: 12
-                color: "#666666"
+                font.pixelSize: Theme.fontSmall
+                color: Theme.textSecondary
                 Layout.alignment: Qt.AlignHCenter
             }
         }
@@ -209,9 +235,9 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: errorLabel.implicitHeight + 20
-            radius: 8
-            color: "#ffeaea"
-            border.color: "#e74c3c"
+            radius: Theme.radius
+            color: Theme.errorBackground
+            border.color: Theme.errorBorder
             border.width: 1
             visible: root.controller.errorMessage.length > 0 && !root.controller.isAnalyzing
 
@@ -221,13 +247,12 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 10
                 wrapMode: Text.WordWrap
-                font.pixelSize: 13
-                color: "#c0392b"
+                font.pixelSize: Theme.fontLabel
+                color: Theme.errorText
             }
         }
     }
 
-    // Navigate to results when analysis completes
     Connections {
         target: root.controller
         function onResultReady() {

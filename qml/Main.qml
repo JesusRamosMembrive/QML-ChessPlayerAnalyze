@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import ChessAnalyzerQML
 
 ApplicationWindow {
@@ -12,10 +11,7 @@ ApplicationWindow {
     minimumHeight: 550
     visible: true
     title: "Chess Player Analyzer"
-    color: "#f5f6fa"
-    Material.theme: Material.Dark
-    Material.accent: Material.Teal
-    Material.primary: Material.BlueGrey
+    color: Theme.background
 
     AnalysisController {
         id: analysisController
