@@ -26,6 +26,8 @@ qt_add_qml_module(appChessAnalyzerQML
         qml/Main.qml
         qml/SearchView.qml
         qml/ResultView.qml
+        qml/PlayerCard.qml
+        qml/AnalysisOptionsDialog.qml
         qml/MetricCard.qml
         qml/Theme.qml
 )

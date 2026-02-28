@@ -37,6 +37,67 @@ def emit(data: dict):
     print(json.dumps(data, ensure_ascii=False), flush=True)
 
 
+def check(args):
+    """Check if a Chess.com player exists and get game count."""
+    try:
+        import requests
+
+        username = args.username.strip().lower()
+        # Check player profile exists
+        resp = requests.get(
+            f"https://api.chess.com/pub/player/{username}",
+            headers={"User-Agent": "ChessAnalyzerQML/1.0"},
+            timeout=10,
+        )
+
+        if resp.status_code == 404:
+            emit({"type": "result", "exists": False, "username": username})
+            return
+
+        if resp.status_code != 200:
+            emit({"type": "error", "message": f"Chess.com API error: HTTP {resp.status_code}"})
+            sys.exit(1)
+
+        # Get archives to count games
+        archives_resp = requests.get(
+            f"https://api.chess.com/pub/player/{username}/games/archives",
+            headers={"User-Agent": "ChessAnalyzerQML/1.0"},
+            timeout=10,
+        )
+
+        games_available = 0
+        months = 0
+        if archives_resp.status_code == 200:
+            archives = archives_resp.json().get("archives", [])
+            months = len(archives)
+
+            # Count games from the last 6 months (or fewer if less available)
+            recent = archives[-6:] if len(archives) >= 6 else archives
+            for url in recent:
+                try:
+                    month_resp = requests.get(
+                        url,
+                        headers={"User-Agent": "ChessAnalyzerQML/1.0"},
+                        timeout=15,
+                    )
+                    if month_resp.status_code == 200:
+                        games_available += len(month_resp.json().get("games", []))
+                except Exception:
+                    pass
+
+        emit({
+            "type": "result",
+            "exists": True,
+            "username": username,
+            "games_available": games_available,
+            "months": min(months, 6),
+        })
+
+    except Exception as e:
+        emit({"type": "error", "message": str(e)})
+        sys.exit(1)
+
+
 def analyze(args):
     """Run the analysis pipeline for a player."""
     try:
@@ -230,6 +291,10 @@ def main():
 
     default_sf = _find_stockfish()
 
+    # check subcommand
+    check_parser = subparsers.add_parser("check", help="Check if a player exists")
+    check_parser.add_argument("--username", required=True, help="Chess.com username")
+
     # analyze subcommand
     analyze_parser = subparsers.add_parser("analyze", help="Analyze a chess player")
     analyze_parser.add_argument("--username", required=True, help="Chess.com username")
@@ -240,7 +305,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "analyze":
+    if args.command == "check":
+        check(args)
+    elif args.command == "analyze":
         analyze(args)
     else:
         parser.print_help()

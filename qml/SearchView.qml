@@ -10,10 +10,13 @@ Item {
 
     signal analysisComplete()
 
+    // States: idle, checking, playerFound, playerNotFound, analyzing
+    property string viewState: "idle"
+
     ColumnLayout {
         anchors.centerIn: parent
-        width: Math.min(parent.width - 60, 420)
-        spacing: 24
+        width: Math.min(parent.width - 60, 440)
+        spacing: 20
 
         // Title
         Label {
@@ -31,9 +34,9 @@ Item {
             color: Theme.textSecondary
         }
 
-        Item { Layout.preferredHeight: 8 }
+        Item { Layout.preferredHeight: 4 }
 
-        // Username input
+        // Username input row
         ColumnLayout {
             spacing: 6
             Layout.fillWidth: true
@@ -45,189 +48,105 @@ Item {
                 color: Theme.textSecondary
             }
 
-            TextField {
-                id: usernameField
-                placeholderText: "e.g. hikaru"
-                placeholderTextColor: Theme.textDisabled
-                font.pixelSize: Theme.fontBody
-                color: Theme.textPrimary
-                Layout.fillWidth: true
-                enabled: !root.controller.isAnalyzing
-
-                background: Rectangle {
-                    radius: Theme.radius
-                    color: usernameField.enabled ? Theme.inputBackground : Theme.inputDisabled
-                    border.color: usernameField.activeFocus ? Theme.inputFocusBorder : Theme.inputBorder
-                    border.width: usernameField.activeFocus ? 2 : 1
-                }
-
-                leftPadding: 12
-                rightPadding: 12
-                topPadding: 10
-                bottomPadding: 10
-
-                onAccepted: {
-                    if (text.trim().length > 0 && !root.controller.isAnalyzing) {
-                        analyzeButton.clicked()
-                    }
-                }
-            }
-        }
-
-        // Games slider
-        ColumnLayout {
-            spacing: 6
-            Layout.fillWidth: true
-
-            Label {
-                text: "Games to analyze: " + gamesSlider.value
-                font.pixelSize: Theme.fontLabel
-                font.weight: Font.Medium
-                color: Theme.textSecondary
-            }
-
-            Slider {
-                id: gamesSlider
-                from: 10
-                to: 200
-                stepSize: 10
-                value: 50
-                Layout.fillWidth: true
-                enabled: !root.controller.isAnalyzing
-
-                background: Rectangle {
-                    x: gamesSlider.leftPadding
-                    y: gamesSlider.topPadding + gamesSlider.availableHeight / 2 - height / 2
-                    width: gamesSlider.availableWidth
-                    height: 4
-                    radius: 2
-                    color: Theme.progressTrack
-
-                    Rectangle {
-                        width: gamesSlider.visualPosition * parent.width
-                        height: parent.height
-                        radius: 2
-                        color: Theme.accent
-                    }
-                }
-
-                handle: Rectangle {
-                    x: gamesSlider.leftPadding + gamesSlider.visualPosition * (gamesSlider.availableWidth - width)
-                    y: gamesSlider.topPadding + gamesSlider.availableHeight / 2 - height / 2
-                    width: 18
-                    height: 18
-                    radius: 9
-                    color: gamesSlider.pressed ? Theme.accentHover : Theme.accent
-                    border.color: Theme.accentHover
-                    border.width: 1
-                }
-            }
-
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "10";  font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
-                Item { Layout.fillWidth: true }
-                Label { text: "100"; font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
-                Item { Layout.fillWidth: true }
-                Label { text: "200"; font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
-            }
-        }
+                spacing: 8
 
-        // Analyze button
-        Button {
-            id: analyzeButton
-            text: root.controller.isAnalyzing ? "Cancel" : "Analyze"
-            Layout.fillWidth: true
-            Layout.preferredHeight: 48
-            enabled: root.controller.isAnalyzing || usernameField.text.trim().length > 0
-            font.pixelSize: 16
-            font.weight: Font.Medium
+                TextField {
+                    id: usernameField
+                    placeholderText: "e.g. hikaru"
+                    placeholderTextColor: Theme.textDisabled
+                    font.pixelSize: Theme.fontBody
+                    color: Theme.textPrimary
+                    Layout.fillWidth: true
+                    enabled: root.viewState === "idle" || root.viewState === "playerNotFound"
 
-            contentItem: Label {
-                text: analyzeButton.text
-                font: analyzeButton.font
-                color: Theme.textOnAccent
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            background: Rectangle {
-                radius: Theme.radius
-                color: {
-                    if (!analyzeButton.enabled) return Theme.textDisabled
-                    if (root.controller.isAnalyzing) return analyzeButton.hovered ? Theme.buttonDangerHover : Theme.buttonDanger
-                    return analyzeButton.hovered ? Theme.accentHover : Theme.accent
-                }
-            }
-
-            onClicked: {
-                if (root.controller.isAnalyzing) {
-                    root.controller.cancelAnalysis()
-                } else {
-                    root.controller.startAnalysis(usernameField.text.trim(), gamesSlider.value)
-                }
-            }
-        }
-
-        // Progress section
-        ColumnLayout {
-            spacing: 8
-            Layout.fillWidth: true
-            visible: root.controller.isAnalyzing
-
-            ProgressBar {
-                id: progressBar
-                clip:true
-                from: 0
-                to: 1
-                value: root.controller.progress
-                Layout.fillWidth: true
-                indeterminate: root.controller.progress === 0
-
-                background: Rectangle {
-                    implicitHeight: 6
-                    radius: 3
-                    color: Theme.progressTrack
-                }
-
-                contentItem: Item {
-                    implicitHeight: 6
-
-                    Rectangle {
-                        width: progressBar.visualPosition * parent.width
-                        height: parent.height
-                        radius: 3
-                        color: Theme.progressFill
-                        visible: !progressBar.indeterminate
+                    background: Rectangle {
+                        radius: Theme.radius
+                        color: usernameField.enabled ? Theme.inputBackground : Theme.inputDisabled
+                        border.color: usernameField.activeFocus ? Theme.inputFocusBorder : Theme.inputBorder
+                        border.width: usernameField.activeFocus ? 2 : 1
                     }
 
-                    Rectangle {
-                        id: indeterminateBar
-                        width: parent.width * 0.3
-                        height: parent.height
-                        radius: 3
-                        color: Theme.progressFill
-                        visible: progressBar.indeterminate
+                    leftPadding: 12
+                    rightPadding: 12
+                    topPadding: 10
+                    bottomPadding: 10
 
-                        SequentialAnimation on x {
-                            running: progressBar.indeterminate
-                            loops: Animation.Infinite
-                            NumberAnimation {
-                                from: -indeterminateBar.width
-                                to: progressBar.width
-                                duration: 1200
-                                easing.type: Easing.InOutQuad
-                            }
+                    onAccepted: {
+                        if (text.trim().length > 0 && root.viewState !== "checking") {
+                            doCheck()
                         }
                     }
                 }
+
+                Button {
+                    id: checkButton
+                    text: root.viewState === "checking" ? "Checking..." : "Check"
+                    enabled: usernameField.text.trim().length > 0
+                             && root.viewState !== "checking"
+                             && root.viewState !== "analyzing"
+                    font.pixelSize: Theme.fontSmall
+                    font.weight: Font.Medium
+
+                    contentItem: Label {
+                        text: checkButton.text
+                        font: checkButton.font
+                        color: checkButton.enabled ? Theme.textOnAccent : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    background: Rectangle {
+                        radius: Theme.radius
+                        color: {
+                            if (!checkButton.enabled) return Theme.inputDisabled
+                            return checkButton.hovered ? Theme.accentHover : Theme.accent
+                        }
+                        implicitWidth: 100
+                        implicitHeight: 40
+                    }
+
+                    onClicked: doCheck()
+                }
+            }
+        }
+
+        // Player Card (visible after successful check or during analysis)
+        PlayerCard {
+            id: playerCard
+            Layout.fillWidth: true
+            visible: root.viewState === "playerFound" || root.viewState === "analyzing"
+            controller: root.controller
+
+            onStartAnalysisClicked: {
+                optionsDialog.open()
             }
 
+            onDismissed: {
+                root.controller.reset()
+                root.viewState = "idle"
+            }
+        }
+
+        // Player not found message
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: notFoundLabel.implicitHeight + 20
+            radius: Theme.radius
+            color: Theme.riskModerateBg
+            border.color: Theme.riskModerate
+            border.width: 1
+            visible: root.viewState === "playerNotFound"
+
             Label {
-                text: root.controller.progressText
-                font.pixelSize: Theme.fontSmall
-                color: Theme.textSecondary
-                Layout.alignment: Qt.AlignHCenter
+                id: notFoundLabel
+                text: "Player \"" + usernameField.text.trim() + "\" not found on Chess.com"
+                anchors.fill: parent
+                anchors.margins: 10
+                wrapMode: Text.WordWrap
+                font.pixelSize: Theme.fontLabel
+                color: Theme.riskModerate
             }
         }
 
@@ -239,7 +158,9 @@ Item {
             color: Theme.errorBackground
             border.color: Theme.errorBorder
             border.width: 1
-            visible: root.controller.errorMessage.length > 0 && !root.controller.isAnalyzing
+            visible: root.controller.errorMessage.length > 0
+                     && root.viewState !== "analyzing"
+                     && root.viewState !== "checking"
 
             Label {
                 id: errorLabel
@@ -253,10 +174,55 @@ Item {
         }
     }
 
+    // Analysis Options Dialog
+    AnalysisOptionsDialog {
+        id: optionsDialog
+        parent: Overlay.overlay
+        username: root.controller.username
+        gamesAvailable: root.controller.gamesAvailable
+
+        onStartRequested: function(games, depth, workers) {
+            root.viewState = "analyzing"
+            root.controller.startAnalysis(root.controller.username, games, depth, workers)
+        }
+    }
+
+    // Controller signal connections
     Connections {
         target: root.controller
+
+        function onCheckComplete() {
+            if (root.controller.playerExists) {
+                root.viewState = "playerFound"
+            } else {
+                root.viewState = "playerNotFound"
+            }
+        }
+
         function onResultReady() {
             root.analysisComplete()
         }
+
+        function onErrorOccurred() {
+            if (root.viewState === "checking") {
+                root.viewState = "idle"
+            } else if (root.viewState === "analyzing") {
+                root.viewState = "playerFound"
+            }
+        }
+
+        function onIsAnalyzingChanged() {
+            if (!root.controller.isAnalyzing && root.viewState === "analyzing") {
+                // Analysis ended (cancelled or error) without result
+                if (root.controller.errorMessage.length === 0) {
+                    root.viewState = "playerFound"
+                }
+            }
+        }
+    }
+
+    function doCheck() {
+        root.viewState = "checking"
+        root.controller.checkPlayer(usernameField.text.trim())
     }
 }
