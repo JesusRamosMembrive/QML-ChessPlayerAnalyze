@@ -1,0 +1,30 @@
+# Build
+build/
+CMakeLists.txt.user
+
+# Qt Creator
+.qtcreator/
+
+# Claude Code
+.claude/
+
+# Data (runtime databases)
+data/*.db
+
+# Stockfish binary (too large for git, users download separately)
+stockfish/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug artifacts
+python_stderr.txt

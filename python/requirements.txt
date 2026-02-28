@@ -1,0 +1,6 @@
+python-chess>=1.999
+stockfish>=3.28.0
+requests>=2.32.3
+sqlmodel>=0.0.24
+numpy>=1.26.0
+scipy>=1.11.0
