@@ -35,6 +35,7 @@ qt_add_qml_module(appChessAnalyzerQML
         qml/SignalsList.qml
         qml/LineChart.qml
         qml/RadarChart.qml
+        qml/SectionGroup.qml
         qml/Theme.qml
 )
 

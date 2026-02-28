@@ -15,7 +15,7 @@ Item {
 
     ColumnLayout {
         anchors.centerIn: parent
-        width: Math.min(parent.width - 60, 440)
+        width: Math.min(parent.width - 60, 500)
         spacing: 20
 
         // Title

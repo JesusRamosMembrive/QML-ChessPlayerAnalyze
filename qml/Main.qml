@@ -5,9 +5,9 @@ import ChessAnalyzerQML
 
 ApplicationWindow {
     id: window
-    width: 520
-    height: 680
-    minimumWidth: 400
+    width: 1200
+    height: 800
+    minimumWidth: 700
     minimumHeight: 550
     visible: true
     title: "Chess Player Analyzer"
