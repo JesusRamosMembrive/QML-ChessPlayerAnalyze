@@ -1,28 +1,39 @@
 """
-Metric calculator modules for aggregation service.
+Metric calculators for player aggregate statistics.
 
-This package contains the calculator registry pattern implementation
-for decomposing the AggregationService God Class into focused,
-single-responsibility calculator classes.
-
-Architecture:
-- base.py: MetricCalculator abstract base class
-- registry.py: CalculatorRegistry for managing calculators
-- Individual calculator modules: Each implementing specific metrics
-
-Usage:
-    from services.calculators import CalculatorRegistry
-    from services.calculators.basic_stats import BasicStatsCalculator
-
-    registry = CalculatorRegistry()
-    registry.register(BasicStatsCalculator())
-    metrics = registry.calculate_all(items)
+Provides calculate_all() which runs all calculators and merges results.
 """
 
+from services.calculators.advanced_metrics import AdvancedMetricsCalculator
 from services.calculators.base import MetricCalculator
-from services.calculators.registry import CalculatorRegistry
+from services.calculators.basic_stats import BasicStatsCalculator
+from services.calculators.difficulty_metrics import DifficultyMetricsCalculator
+from services.calculators.historical import HistoricalCalculator
+from services.calculators.phase_1b_metrics import Phase1BMetricsCalculator
+from services.calculators.phase_metrics import PhaseMetricsCalculator
+from services.calculators.precision_metrics import PrecisionMetricsCalculator
+from services.calculators.psychological import PsychologicalCalculator
+from services.calculators.time_metrics import TimeMetricsCalculator
 
-__all__ = [
-    "MetricCalculator",
-    "CalculatorRegistry",
+_CALCULATORS = [
+    BasicStatsCalculator(),
+    AdvancedMetricsCalculator(),
+    PrecisionMetricsCalculator(),
+    PhaseMetricsCalculator(),
+    TimeMetricsCalculator(),
+    PsychologicalCalculator(),
+    Phase1BMetricsCalculator(),
+    DifficultyMetricsCalculator(),
+    HistoricalCalculator(max_games=50),
 ]
+
+
+def calculate_all(items: list[dict]) -> dict:
+    """Run all metric calculators and merge results into a single dict."""
+    result = {}
+    for calc in _CALCULATORS:
+        result.update(calc.calculate(items))
+    return result
+
+
+__all__ = ["MetricCalculator", "calculate_all"]

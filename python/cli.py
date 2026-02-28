@@ -101,18 +101,11 @@ def check(args):
 def analyze(args):
     """Run the analysis pipeline for a player."""
     try:
-        emit({"type": "status", "message": "Initializing database..."})
-
-        from database import create_tables, get_session
-        create_tables()
-        session = get_session()
-
         emit({"type": "status", "message": f"Fetching games for {args.username}..."})
 
         from services.analysis_service import AnalysisService
 
         service = AnalysisService(
-            session=session,
             stockfish_path=args.stockfish,
             depth=args.depth,
         )
@@ -139,205 +132,25 @@ def analyze(args):
 
         emit({"type": "status", "message": "Reading results..."})
 
-        # Emit pipeline stats as debug info
         emit({
             "type": "status",
             "message": f"Pipeline: {stats.get('new_analyses', 0)} analyzed, "
-                       f"{stats.get('failed_analyses', 0)} failed, "
-                       f"aggregates_updated={stats.get('aggregates_updated', False)}"
+                       f"{stats.get('failed_analyses', 0)} failed"
         })
 
-        # Try reading aggregates
-        result = _build_result_from_aggregates(session, args.username)
-
-        # If aggregates gave us nothing, try reading analyses directly
-        if result is None or result.get("games_count", 0) == 0:
-            result = _build_result_from_analyses(session, args.username, stats)
-
+        # Build result from saved JSON
+        result = _build_result(args.username)
         emit(result)
-        session.close()
 
     except Exception as e:
         emit({"type": "error", "message": f"{e}\n{traceback.format_exc()}"})
         sys.exit(1)
 
 
-def _parse_historical(agg, key: str) -> list:
-    """Extract a timeline array from aggregate historical_data JSON."""
-    try:
-        data = agg.historical_data
-        if data is None:
-            return []
-        if isinstance(data, str):
-            data = json.loads(data)
-        return data.get(key, [])
-    except Exception:
-        return []
+def _build_result(username: str) -> dict:
+    """Build result dict from stored player JSON."""
+    from storage import load_player
 
-
-def _build_result_from_aggregates(session, username: str) -> dict | None:
-    """Try to build result from PlayerAggregate table."""
-    try:
-        from repositories import AggregateRepository
-        aggregate_repo = AggregateRepository(session)
-        aggregates = aggregate_repo.get_all_by_username(username)
-
-        if not aggregates:
-            return None
-
-        agg = aggregates[0]
-
-        # Recompute suspicion signals from aggregate fields
-        signals = []
-        confidence = "low"
-        try:
-            from analysis.suspicion import calculate_suspicion_score
-            susp = calculate_suspicion_score(
-                anomaly_score_mean=agg.anomaly_score_mean,
-                opening_to_middle_transition=agg.opening_to_middle_transition,
-                collapse_rate=agg.collapse_rate,
-                phase_consistency_middle=agg.phase_consistency_middle,
-                robust_acpl=agg.robust_acpl,
-                match_rate_mean=agg.top5_match_rate_mean,
-                blunder_rate=agg.blunder_rate_mean,
-                top2_match_rate=agg.top2_match_rate_mean,
-                pressure_degradation=agg.pressure_degradation,
-                tilt_rate=agg.tilt_rate,
-                opening_to_middle_improvement=getattr(agg, 'opening_to_middle_improvement', None),
-                variance_drop=getattr(agg, 'variance_drop', None),
-                post_pause_improvement=getattr(agg, 'post_pause_improvement', None),
-            )
-            signals = susp.get("signals", [])
-            confidence = susp.get("confidence", "low")
-        except Exception:
-            pass
-
-        # Derive psychological profile from aggregate fields
-        psych_profile = _derive_psychological_profile(agg)
-
-        # Format date range
-        first_date = ""
-        last_date = ""
-        if agg.first_game_date:
-            first_date = agg.first_game_date.strftime("%b %Y")
-        if agg.last_game_date:
-            last_date = agg.last_game_date.strftime("%b %Y")
-
-        return {
-            "type": "result",
-            "username": username,
-
-            # Core (backward compat)
-            "suspicion_score": agg.suspicion_score or 0,
-            "risk_level": _risk_level(agg.suspicion_score or 0),
-            "acpl_mean": round(agg.acpl_mean or 0, 2),
-            "top1_match_rate": round((agg.top1_match_rate_mean or 0) * 100, 1),
-            "games_count": agg.games_count or 0,
-            "blunder_rate": round((agg.blunder_rate_mean or 0) * 100, 1),
-
-            # Signals
-            "signals": signals,
-            "confidence": confidence,
-
-            # ACPL statistics
-            "acpl_median": round(agg.acpl_median or 0, 2),
-            "acpl_std": round(agg.acpl_std or 0, 2),
-            "acpl_min": round(agg.acpl_min or 0, 2),
-            "acpl_max": round(agg.acpl_max or 0, 2),
-            "acpl_p25": round(agg.acpl_p25 or 0, 2),
-            "acpl_p75": round(agg.acpl_p75 or 0, 2),
-            "robust_acpl": round(agg.robust_acpl or 0, 2),
-
-            # Match rates
-            "top2_match_rate": round((agg.top2_match_rate_mean or 0) * 100, 1),
-            "top3_match_rate": round((agg.top3_match_rate_mean or 0) * 100, 1),
-
-            # Rank distribution
-            "rank_0_pct": round((agg.rank_0_mean or 0) * 100, 1),
-            "rank_1_pct": round((agg.rank_1_mean or 0) * 100, 1),
-            "rank_2_pct": round((agg.rank_2_mean or 0) * 100, 1),
-            "rank_3plus_pct": round((agg.rank_3plus_mean or 0) * 100, 1),
-
-            # Phases
-            "phase_acpl_opening": round(agg.phase_consistency_opening or 0, 1),
-            "phase_acpl_middle": round(agg.phase_consistency_middle or 0, 1),
-            "phase_acpl_endgame": round(agg.phase_consistency_endgame or 0, 1),
-            "opening_to_middle_transition": round(agg.opening_to_middle_transition or 0, 1),
-            "middle_to_endgame_transition": round(agg.middle_to_endgame_transition or 0, 1),
-            "collapse_rate": round((agg.collapse_rate or 0) * 100, 1),
-
-            # Psychological
-            "psychological_profile": psych_profile,
-            "tilt_rate": round(agg.tilt_rate or 0, 2),
-            "recovery_rate": round((agg.recovery_rate or 0) * 100, 1),
-            "pressure_degradation": round(agg.pressure_degradation or 0, 1),
-            "closing_acpl": round(agg.closing_acpl or 0, 2),
-
-            # Temporal
-            "time_complexity_correlation": round(agg.time_complexity_correlation or 0, 3),
-            "anomaly_score": round(agg.anomaly_score_mean or 0, 1),
-
-            # Precision bursts
-            "precision_burst_mean": round(agg.precision_burst_mean or 0, 2),
-            "longest_burst_mean": round(agg.longest_burst_mean or 0, 1),
-            "precision_rate": round((agg.precision_rate_mean or 0) * 100, 1),
-
-            # Phase 1B — advanced suspicion signals
-            "opening_to_middle_improvement": round(getattr(agg, 'opening_to_middle_improvement', None) or 0, 1),
-            "variance_drop": round(getattr(agg, 'variance_drop', None) or 0, 2),
-            "post_pause_improvement": round(getattr(agg, 'post_pause_improvement', None) or 0, 1),
-
-            # Additional stats
-            "blunder_rate_std": round(agg.blunder_rate_std or 0, 3),
-            "move_count_median": round(agg.move_count_median or 0, 1),
-
-            # Historical timelines
-            "acpl_timeline": _parse_historical(agg, "acpl_timeline"),
-            "match_rate_timeline": _parse_historical(agg, "match_rate_timeline"),
-
-            # Meta
-            "move_count_mean": round(agg.move_count_mean or 0, 1),
-            "first_game_date": first_date,
-            "last_game_date": last_date,
-        }
-    except Exception as e:
-        emit({"type": "status", "message": f"Aggregate read failed: {e}"})
-        return None
-
-
-def _derive_psychological_profile(agg) -> str:
-    """Derive psychological profile label from aggregate fields."""
-    recovery = agg.recovery_rate or 0
-    closing = agg.closing_acpl or 0
-    pressure = agg.pressure_degradation or 0
-    tilt = agg.tilt_rate or 0
-
-    if tilt == 0 and recovery > 0.95 and pressure < 5:
-        return "ENGINE_LIKE"
-    is_resilient = recovery > 0.6
-    is_fragile = recovery < 0.3
-    good_closer = 0 < closing < 50
-    poor_closer = closing > 80
-    handles_pressure = pressure != 0 and pressure < 20
-    struggles_pressure = pressure > 50
-
-    if is_resilient and good_closer:
-        return "RESILIENT_CLOSER"
-    elif is_resilient and poor_closer:
-        return "RESILIENT_SHAKY"
-    elif is_fragile and good_closer:
-        return "FRAGILE_CLOSER"
-    elif is_fragile and poor_closer:
-        return "FRAGILE_CRUMBLER"
-    elif handles_pressure:
-        return "PRESSURE_FIGHTER"
-    elif struggles_pressure:
-        return "PRESSURE_VULNERABLE"
-    return "NORMAL_HUMAN"
-
-
-def _build_result_from_analyses(session, username: str, stats: dict) -> dict:
-    """Fallback: build result directly from GameAnalysis rows."""
     empty = {
         "type": "result",
         "username": username,
@@ -361,34 +174,177 @@ def _build_result_from_analyses(session, username: str, stats: dict) -> dict:
         "acpl_timeline": [], "match_rate_timeline": [],
         "move_count_mean": 0, "first_game_date": "", "last_game_date": "",
     }
-    try:
-        from repositories import AnalysisRepository
-        repo = AnalysisRepository(session)
-        analyses = repo.get_by_username(username)
 
-        if not analyses:
-            return empty
-
-        # Compute basic stats from individual analyses
-        acpls = [a.acpl for a in analyses if a.acpl is not None]
-        top1s = [a.top1_match_rate for a in analyses if a.top1_match_rate is not None]
-        blunders = [a.blunder_rate for a in analyses if a.blunder_rate is not None]
-
-        acpl_mean = sum(acpls) / len(acpls) if acpls else 0
-        top1_mean = sum(top1s) / len(top1s) if top1s else 0
-        blunder_mean = sum(blunders) / len(blunders) if blunders else 0
-
-        result = dict(empty)
-        result.update({
-            "acpl_mean": round(acpl_mean, 2),
-            "top1_match_rate": round(top1_mean * 100, 1),
-            "games_count": len(analyses),
-            "blunder_rate": round(blunder_mean * 100, 1),
-            "risk_level": "LOW",
-        })
-        return result
-    except Exception:
+    data = load_player(username)
+    if not data:
         return empty
+
+    aggregates = data.get("aggregates", {})
+    agg = aggregates.get("All")
+    if not agg:
+        return empty
+
+    # Helper to safely get from agg dict
+    def g(key, default=0):
+        v = agg.get(key)
+        return v if v is not None else default
+
+    suspicion_score = g("suspicion_score")
+
+    # Recompute suspicion signals
+    signals = []
+    confidence = "low"
+    try:
+        from analysis.suspicion import calculate_suspicion_score
+        susp = calculate_suspicion_score(
+            anomaly_score_mean=g("anomaly_score_mean"),
+            opening_to_middle_transition=g("opening_to_middle_transition"),
+            collapse_rate=g("collapse_rate"),
+            phase_consistency_middle=g("phase_consistency_middle"),
+            robust_acpl=g("robust_acpl"),
+            match_rate_mean=g("top5_match_rate_mean"),
+            blunder_rate=g("blunder_rate_mean"),
+            top2_match_rate=g("top2_match_rate_mean"),
+            pressure_degradation=g("pressure_degradation"),
+            tilt_rate=g("tilt_rate"),
+            opening_to_middle_improvement=g("opening_to_middle_improvement"),
+            variance_drop=g("variance_drop"),
+            post_pause_improvement=g("post_pause_improvement"),
+        )
+        signals = susp.get("signals", [])
+        confidence = susp.get("confidence", "low")
+    except Exception:
+        pass
+
+    # Derive psychological profile
+    psych_profile = _derive_psychological_profile(agg)
+
+    # Historical timelines
+    acpl_timeline = g("acpl_timeline", [])
+    match_rate_timeline = g("match_rate_timeline", [])
+
+    # Date range from historical data
+    first_date = ""
+    last_date = ""
+    if acpl_timeline:
+        first_date = acpl_timeline[0].get("game_date", "") if acpl_timeline else ""
+        last_date = acpl_timeline[-1].get("game_date", "") if acpl_timeline else ""
+
+    return {
+        "type": "result",
+        "username": username,
+
+        # Core
+        "suspicion_score": suspicion_score,
+        "risk_level": _risk_level(suspicion_score),
+        "acpl_mean": round(g("acpl_mean"), 2),
+        "top1_match_rate": round(g("top1_match_rate_mean") * 100, 1),
+        "games_count": g("games_count"),
+        "blunder_rate": round(g("blunder_rate_mean") * 100, 1),
+
+        # Signals
+        "signals": signals,
+        "confidence": confidence,
+
+        # ACPL statistics
+        "acpl_median": round(g("acpl_median"), 2),
+        "acpl_std": round(g("acpl_std"), 2),
+        "acpl_min": round(g("acpl_min"), 2),
+        "acpl_max": round(g("acpl_max"), 2),
+        "acpl_p25": round(g("acpl_p25"), 2),
+        "acpl_p75": round(g("acpl_p75"), 2),
+        "robust_acpl": round(g("robust_acpl"), 2),
+
+        # Match rates
+        "top2_match_rate": round(g("top2_match_rate_mean") * 100, 1),
+        "top3_match_rate": round(g("top3_match_rate_mean") * 100, 1),
+
+        # Rank distribution
+        "rank_0_pct": round(g("rank_0_mean") * 100, 1),
+        "rank_1_pct": round(g("rank_1_mean") * 100, 1),
+        "rank_2_pct": round(g("rank_2_mean") * 100, 1),
+        "rank_3plus_pct": round(g("rank_3plus_mean") * 100, 1),
+
+        # Phases
+        "phase_acpl_opening": round(g("phase_consistency_opening"), 1),
+        "phase_acpl_middle": round(g("phase_consistency_middle"), 1),
+        "phase_acpl_endgame": round(g("phase_consistency_endgame"), 1),
+        "opening_to_middle_transition": round(g("opening_to_middle_transition"), 1),
+        "middle_to_endgame_transition": round(g("middle_to_endgame_transition"), 1),
+        "collapse_rate": round(g("collapse_rate") * 100, 1),
+
+        # Psychological
+        "psychological_profile": psych_profile,
+        "tilt_rate": round(g("tilt_rate"), 2),
+        "recovery_rate": round(g("recovery_rate") * 100, 1),
+        "pressure_degradation": round(g("pressure_degradation"), 1),
+        "closing_acpl": round(g("closing_acpl"), 2),
+
+        # Temporal
+        "time_complexity_correlation": round(g("time_complexity_correlation"), 3),
+        "anomaly_score": round(g("anomaly_score_mean"), 1),
+
+        # Precision bursts
+        "precision_burst_mean": round(g("precision_burst_mean"), 2),
+        "longest_burst_mean": round(g("longest_burst_mean"), 1),
+        "precision_rate": round(g("precision_rate_mean") * 100, 1),
+
+        # Phase 1B
+        "opening_to_middle_improvement": round(g("opening_to_middle_improvement"), 1),
+        "variance_drop": round(g("variance_drop"), 2),
+        "post_pause_improvement": round(g("post_pause_improvement"), 1),
+
+        # Additional stats
+        "blunder_rate_std": round(g("blunder_rate_std"), 3),
+        "move_count_median": round(g("move_count_median"), 1),
+
+        # Historical timelines
+        "acpl_timeline": acpl_timeline,
+        "match_rate_timeline": match_rate_timeline,
+
+        # Meta
+        "move_count_mean": round(g("move_count_mean"), 1),
+        "first_game_date": first_date,
+        "last_game_date": last_date,
+    }
+
+
+def _derive_psychological_profile(agg) -> str:
+    """Derive psychological profile label from aggregate fields."""
+    def g(key, default=0):
+        if isinstance(agg, dict):
+            v = agg.get(key)
+            return v if v is not None else default
+        v = getattr(agg, key, None)
+        return v if v is not None else default
+
+    recovery = g("recovery_rate")
+    closing = g("closing_acpl")
+    pressure = g("pressure_degradation")
+    tilt = g("tilt_rate")
+
+    if tilt == 0 and recovery > 0.95 and pressure < 5:
+        return "ENGINE_LIKE"
+    is_resilient = recovery > 0.6
+    is_fragile = recovery < 0.3
+    good_closer = 0 < closing < 50
+    poor_closer = closing > 80
+    handles_pressure = pressure != 0 and pressure < 20
+    struggles_pressure = pressure > 50
+
+    if is_resilient and good_closer:
+        return "RESILIENT_CLOSER"
+    elif is_resilient and poor_closer:
+        return "RESILIENT_SHAKY"
+    elif is_fragile and good_closer:
+        return "FRAGILE_CLOSER"
+    elif is_fragile and poor_closer:
+        return "FRAGILE_CRUMBLER"
+    elif handles_pressure:
+        return "PRESSURE_FIGHTER"
+    elif struggles_pressure:
+        return "PRESSURE_VULNERABLE"
+    return "NORMAL_HUMAN"
 
 
 def _risk_level(score: float) -> str:
