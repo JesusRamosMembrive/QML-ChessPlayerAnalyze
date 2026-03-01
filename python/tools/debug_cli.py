@@ -122,13 +122,15 @@ def cmd_analyze_pgn(args) -> None:
     print(format_table(phase_headers, phase_rows))
     print()
     summary = phase["summary"]
-    print(f"  Result: opening={summary['opening']} moves, middlegame={summary['middlegame']} moves, endgame={summary['endgame']} moves")
+    print(f"  Result: opening={summary.get('opening', 0)} moves, middlegame={summary.get('middlegame', 0)} moves, endgame={summary.get('endgame', 0)} moves")
     print()
 
     # --- Move-by-Move Analysis ---
     move_evals = result["move_evals"]
+    # Build phase lookup from phase classification
+    phase_by_move = {m["move_number"]: m["phase"] for m in phase.get("moves", [])}
     print(format_section_header("MOVE-BY-MOVE ANALYSIS"))
-    move_headers = ["#", "Played", "Best", "CPLoss", "Rank", "EvalBefore", "EvalAfter", "Book?"]
+    move_headers = ["#", "Played", "Best", "CPLoss", "Rank", "Phase", "EvalBefore", "EvalAfter", "Book?"]
     move_rows = []
     for m in move_evals:
         cp = str(m["cp_loss"]) if m["cp_loss"] is not None else "mate"
@@ -138,6 +140,7 @@ def cmd_analyze_pgn(args) -> None:
             m["best"],
             cp,
             str(m["best_rank"]),
+            phase_by_move.get(m["move_number"], "?"),
             str(m["eval_before"]),
             str(m["eval_after"]),
             "YES" if m["is_book_move"] else "",

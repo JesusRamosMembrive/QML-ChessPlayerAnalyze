@@ -6,9 +6,7 @@ but capture and return the intermediate values that are normally hidden.
 
 from pathlib import Path
 
-import chess
-
-from utils import iterate_moves_with_board, parse_pgn, extract_pgn_metadata
+from utils import parse_pgn
 from analysis.engine import analyze_game
 from analysis.basic_metrics import (
     calculate_acpl,
@@ -113,7 +111,7 @@ def inspect_opening_book(pgn_text: str) -> dict:
     book_path = OPENING_BOOK_PATH
     book_exists = book_path.exists()
 
-    detection_method = "unknown"
+    detection_method = "fallback"
     out_of_book_index = 0
     book_stats = None
     error_msg = None
@@ -171,9 +169,12 @@ def analyze_pgn_transparent(
     robust_acpl = calculate_robust_acpl(non_book_evals) if non_book_evals else None
     match_rates = calculate_topn_match_rates(non_book_evals) if non_book_evals else None
     blunders = calculate_blunders(non_book_evals) if non_book_evals else None
-    phase_breakdown = calculate_phase_metrics(pgn_text, move_evals, opening_moves, endgame_pieces)
-    enhanced_phase = calculate_enhanced_phase_analysis(pgn_text, move_evals, opening_moves, endgame_pieces)
-    phase_variance = calculate_phase_variance(pgn_text, move_evals, opening_moves, endgame_pieces)
+    if move_evals:
+        phase_breakdown = calculate_phase_metrics(pgn_text, move_evals, opening_moves, endgame_pieces)
+        enhanced_phase = calculate_enhanced_phase_analysis(pgn_text, move_evals, opening_moves, endgame_pieces)
+        phase_variance = calculate_phase_variance(pgn_text, move_evals, opening_moves, endgame_pieces)
+    else:
+        phase_breakdown = enhanced_phase = phase_variance = None
     precision = calculate_precision_bursts(non_book_evals) if non_book_evals else None
 
     # 5. Generate warnings
