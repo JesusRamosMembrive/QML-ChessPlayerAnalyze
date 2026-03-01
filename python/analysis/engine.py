@@ -4,11 +4,15 @@ Stockfish chess engine wrapper for move-by-move game analysis.
 Core engine functionality for analyzing chess games using Stockfish.
 """
 
+import logging
+
 import chess
 import chess.engine
 
 from analysis.opening_book import get_detector
 from utils import get_mainline_moves, parse_pgn
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_material_balance(board: chess.Board) -> int:
@@ -82,7 +86,7 @@ def analyze_game(
             ...
         ]
     """
-    print(f"Loading PGN and initializing Stockfish (depth={depth}, multipv={multipv})...")
+    logger.info("Loading PGN and initializing Stockfish (depth=%d, multipv=%d)...", depth, multipv)
 
     # Parse PGN using utility function
     game = parse_pgn(pgn_text)
@@ -102,7 +106,7 @@ def analyze_game(
     move_evaluations: list[dict] = []
     total_moves = len(mainline_moves)
 
-    print(f"Analyzing {total_moves} moves...")
+    logger.info("Analyzing %d moves...", total_moves)
 
     # Detect opening book moves using Polyglot book
     out_of_book_index = None
@@ -110,10 +114,10 @@ def analyze_game(
         try:
             detector = get_detector()
             out_of_book_index = detector.get_out_of_book_move_index(pgn_text)
-            print(f"Opening book detection: First {out_of_book_index} moves are in book")
+            logger.info("Opening book detection: First %d moves are in book", out_of_book_index)
         except Exception as e:
-            print(
-                f"Warning: Could not load opening book ({e}), using fallback (skip first 10 moves)"
+            logger.warning(
+                "Could not load opening book (%s), using fallback (skip first 10 moves)", e
             )
             out_of_book_index = 10  # Fallback to simple heuristic
 
@@ -137,7 +141,7 @@ def analyze_game(
                 continue
 
         if move_num % 10 == 0:
-            print(f"  Progress: {move_num}/{total_moves} moves analyzed")
+            logger.info("  Progress: %d/%d moves analyzed", move_num, total_moves)
 
         # Count legal moves in current position
         legal_moves_count = board.legal_moves.count()
@@ -330,6 +334,6 @@ def analyze_game(
         # board is already in the new position (we pushed the move)
 
     engine.quit()
-    print("✅ Analysis complete")
+    logger.info("Analysis complete")
 
     return move_evaluations

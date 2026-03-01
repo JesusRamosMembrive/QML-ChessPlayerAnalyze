@@ -65,11 +65,11 @@ class PsychologicalCalculator(MetricCalculator):
                 logger.debug(f"Skipping game {item['game'].id}: insufficient psychological data")
                 continue
 
-            if "tilt_detected" in psych_data:
-                tilt_rates.append(1 if psych_data["tilt_detected"] else 0)
+            if "tilt_episodes" in psych_data:
+                tilt_rates.append(1 if psych_data["tilt_episodes"] > 0 else 0)
 
-            if "recovery_pattern" in psych_data:
-                recovery_rates.append(1 if psych_data["recovery_pattern"] else 0)
+            if "recovery_rate" in psych_data:
+                recovery_rates.append(psych_data["recovery_rate"])
 
             # Closing ACPL: 0.0 means no data (skip), otherwise include
             if "closing_acpl" in psych_data and psych_data["closing_acpl"] > 0:

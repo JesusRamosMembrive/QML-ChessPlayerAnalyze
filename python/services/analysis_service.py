@@ -407,6 +407,11 @@ def _analyze_single_game_worker(
             precision_bursts = calculate_precision_bursts(player_move_evals)
             enhanced_phase = calculate_enhanced_phase_analysis(pgn, player_move_evals)
 
+        # Count actual book moves to skip in time data (instead of hardcoding 10)
+        book_move_count = sum(
+            1 for m in player_move_evals if isinstance(m, dict) and m.get("is_book_move")
+        )
+
         # Time analysis
         time_analysis = None
         time_complexity = None
@@ -425,7 +430,7 @@ def _analyze_single_game_worker(
                 for i in range(0 if is_white else 1, len(move_times), 2):
                     if i < len(move_times):
                         move_counter += 1
-                        if move_counter > 10:
+                        if move_counter > book_move_count:
                             player_times.append(abs(move_times[i]))
 
                 aligned_player_evals = player_move_evals[: len(player_times)]
@@ -442,7 +447,7 @@ def _analyze_single_game_worker(
                 for i in range(0 if is_white else 1, len(move_times), 2):
                     if i < len(move_times):
                         move_counter += 1
-                        if move_counter > 10:
+                        if move_counter > book_move_count:
                             player_times.append(abs(move_times[i]))
                 aligned_player_evals = player_move_evals[: len(player_times)]
 
@@ -458,7 +463,7 @@ def _analyze_single_game_worker(
                     for i in range(0 if is_white else 1, len(clock_times), 2):
                         if i < len(clock_times):
                             move_counter += 1
-                            if move_counter > 10:
+                            if move_counter > book_move_count:
                                 player_clock_times.append(clock_times[i])
 
                 time_control = metadata.get("time_control", "blitz")

@@ -287,14 +287,14 @@ def calculate_suspicion_score(
         if pressure_degradation < -5.0:  # Improves significantly
             score += 15
             signals.append(
-                f"Improves significantly under pressure ({pressure_degradation:+.1f} cp) - highly suspicious"
+                f"Improves significantly under pressure ({pressure_degradation:+.1f}%) - highly suspicious"
             )
         elif pressure_degradation < -2.0:  # Improves moderately
             score += 10
-            signals.append(f"Improves under pressure ({pressure_degradation:+.1f} cp) - suspicious")
+            signals.append(f"Improves under pressure ({pressure_degradation:+.1f}%) - suspicious")
         elif pressure_degradation < 2.0:  # No degradation (should degrade)
             score += 5
-            signals.append(f"Minimal degradation under pressure ({pressure_degradation:+.1f} cp)")
+            signals.append(f"Minimal degradation under pressure ({pressure_degradation:+.1f}%)")
 
     # Signal 10: Low Tilt Rate (10 points max)
     # ENGINE DETECTION: Engines never tilt, humans frequently do after mistakes

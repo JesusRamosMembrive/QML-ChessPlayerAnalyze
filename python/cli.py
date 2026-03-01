@@ -185,11 +185,11 @@ def _build_result(username: str) -> dict:
         return empty
 
     # Helper to safely get from agg dict
-    def g(key, default=0):
+    def g(key, default=None):
         v = agg.get(key)
         return v if v is not None else default
 
-    suspicion_score = g("suspicion_score")
+    suspicion_score = g("suspicion_score", 0)
 
     # Recompute suspicion signals
     signals = []
@@ -210,6 +210,15 @@ def _build_result(username: str) -> dict:
             opening_to_middle_improvement=g("opening_to_middle_improvement"),
             variance_drop=g("variance_drop"),
             post_pause_improvement=g("post_pause_improvement"),
+            cwmr_delta=g("cwmr_delta_mean"),
+            cpa=g("cpa_mean"),
+            sensitivity=g("sensitivity_mean"),
+            ubma=g("ubma_mean"),
+            difficulty_variance_ratio=g("variance_ratio_mean"),
+            critical_accuracy_boost=g("critical_accuracy_boost_mean"),
+            oscillation_score=g("oscillation_score_mean"),
+            mismatch_rate=g("mismatch_rate_mean"),
+            effort_ratio=g("effort_ratio_mean"),
         )
         signals = susp.get("signals", [])
         confidence = susp.get("confidence", "low")
@@ -237,73 +246,73 @@ def _build_result(username: str) -> dict:
         # Core
         "suspicion_score": suspicion_score,
         "risk_level": _risk_level(suspicion_score),
-        "acpl_mean": round(g("acpl_mean"), 2),
-        "top1_match_rate": round(g("top1_match_rate_mean") * 100, 1),
-        "games_count": g("games_count"),
-        "blunder_rate": round(g("blunder_rate_mean") * 100, 1),
+        "acpl_mean": round(g("acpl_mean", 0), 2),
+        "top1_match_rate": round(g("top1_match_rate_mean", 0) * 100, 1),
+        "games_count": g("games_count", 0),
+        "blunder_rate": round(g("blunder_rate_mean", 0) * 100, 1),
 
         # Signals
         "signals": signals,
         "confidence": confidence,
 
         # ACPL statistics
-        "acpl_median": round(g("acpl_median"), 2),
-        "acpl_std": round(g("acpl_std"), 2),
-        "acpl_min": round(g("acpl_min"), 2),
-        "acpl_max": round(g("acpl_max"), 2),
-        "acpl_p25": round(g("acpl_p25"), 2),
-        "acpl_p75": round(g("acpl_p75"), 2),
-        "robust_acpl": round(g("robust_acpl"), 2),
+        "acpl_median": round(g("acpl_median", 0), 2),
+        "acpl_std": round(g("acpl_std", 0), 2),
+        "acpl_min": round(g("acpl_min", 0), 2),
+        "acpl_max": round(g("acpl_max", 0), 2),
+        "acpl_p25": round(g("acpl_p25", 0), 2),
+        "acpl_p75": round(g("acpl_p75", 0), 2),
+        "robust_acpl": round(g("robust_acpl", 0), 2),
 
         # Match rates
-        "top2_match_rate": round(g("top2_match_rate_mean") * 100, 1),
-        "top3_match_rate": round(g("top3_match_rate_mean") * 100, 1),
+        "top2_match_rate": round(g("top2_match_rate_mean", 0) * 100, 1),
+        "top3_match_rate": round(g("top3_match_rate_mean", 0) * 100, 1),
 
         # Rank distribution
-        "rank_0_pct": round(g("rank_0_mean") * 100, 1),
-        "rank_1_pct": round(g("rank_1_mean") * 100, 1),
-        "rank_2_pct": round(g("rank_2_mean") * 100, 1),
-        "rank_3plus_pct": round(g("rank_3plus_mean") * 100, 1),
+        "rank_0_pct": round(g("rank_0_mean", 0) * 100, 1),
+        "rank_1_pct": round(g("rank_1_mean", 0) * 100, 1),
+        "rank_2_pct": round(g("rank_2_mean", 0) * 100, 1),
+        "rank_3plus_pct": round(g("rank_3plus_mean", 0) * 100, 1),
 
         # Phases
-        "phase_acpl_opening": round(g("phase_consistency_opening"), 1),
-        "phase_acpl_middle": round(g("phase_consistency_middle"), 1),
-        "phase_acpl_endgame": round(g("phase_consistency_endgame"), 1),
-        "opening_to_middle_transition": round(g("opening_to_middle_transition"), 1),
-        "middle_to_endgame_transition": round(g("middle_to_endgame_transition"), 1),
-        "collapse_rate": round(g("collapse_rate") * 100, 1),
+        "phase_acpl_opening": round(g("phase_consistency_opening", 0), 1),
+        "phase_acpl_middle": round(g("phase_consistency_middle", 0), 1),
+        "phase_acpl_endgame": round(g("phase_consistency_endgame", 0), 1),
+        "opening_to_middle_transition": round(g("opening_to_middle_transition", 0), 1),
+        "middle_to_endgame_transition": round(g("middle_to_endgame_transition", 0), 1),
+        "collapse_rate": round(g("collapse_rate", 0) * 100, 1),
 
         # Psychological
         "psychological_profile": psych_profile,
-        "tilt_rate": round(g("tilt_rate"), 2),
-        "recovery_rate": round(g("recovery_rate") * 100, 1),
-        "pressure_degradation": round(g("pressure_degradation"), 1),
-        "closing_acpl": round(g("closing_acpl"), 2),
+        "tilt_rate": round(g("tilt_rate", 0), 2),
+        "recovery_rate": round(g("recovery_rate", 0), 1),
+        "pressure_degradation": round(g("pressure_degradation", 0), 1),
+        "closing_acpl": round(g("closing_acpl", 0), 2),
 
         # Temporal
-        "time_complexity_correlation": round(g("time_complexity_correlation"), 3),
-        "anomaly_score": round(g("anomaly_score_mean"), 1),
+        "time_complexity_correlation": round(g("time_complexity_correlation", 0), 3),
+        "anomaly_score": round(g("anomaly_score_mean", 0), 1),
 
         # Precision bursts
-        "precision_burst_mean": round(g("precision_burst_mean"), 2),
-        "longest_burst_mean": round(g("longest_burst_mean"), 1),
-        "precision_rate": round(g("precision_rate_mean") * 100, 1),
+        "precision_burst_mean": round(g("precision_burst_mean", 0), 2),
+        "longest_burst_mean": round(g("longest_burst_mean", 0), 1),
+        "precision_rate": round(g("precision_rate_mean", 0) * 100, 1),
 
         # Phase 1B
-        "opening_to_middle_improvement": round(g("opening_to_middle_improvement"), 1),
-        "variance_drop": round(g("variance_drop"), 2),
-        "post_pause_improvement": round(g("post_pause_improvement"), 1),
+        "opening_to_middle_improvement": round(g("opening_to_middle_improvement", 0), 1),
+        "variance_drop": round(g("variance_drop", 0), 2),
+        "post_pause_improvement": round(g("post_pause_improvement", 0), 1),
 
         # Additional stats
-        "blunder_rate_std": round(g("blunder_rate_std"), 3),
-        "move_count_median": round(g("move_count_median"), 1),
+        "blunder_rate_std": round(g("blunder_rate_std", 0), 3),
+        "move_count_median": round(g("move_count_median", 0), 1),
 
         # Historical timelines
         "acpl_timeline": acpl_timeline,
         "match_rate_timeline": match_rate_timeline,
 
         # Meta
-        "move_count_mean": round(g("move_count_mean"), 1),
+        "move_count_mean": round(g("move_count_mean", 0), 1),
         "first_game_date": first_date,
         "last_game_date": last_date,
     }
@@ -349,11 +358,11 @@ def _derive_psychological_profile(agg) -> str:
 
 def _risk_level(score: float) -> str:
     """Convert suspicion score to risk level string."""
-    if score >= 150:
+    if score >= 180:
         return "VERY HIGH"
-    elif score >= 100:
+    elif score >= 130:
         return "HIGH"
-    elif score >= 60:
+    elif score >= 80:
         return "MODERATE"
     else:
         return "LOW"

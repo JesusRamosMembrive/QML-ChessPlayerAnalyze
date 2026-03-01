@@ -78,7 +78,7 @@ class Phase1BMetricsCalculator(MetricCalculator):
                 pgn_text=pgn_text,
                 move_evals=move_evals,
                 opening_moves=15,
-                endgame_pieces=6,
+                endgame_pieces=12,
             )
 
             # Variance drop (consistency increase)
