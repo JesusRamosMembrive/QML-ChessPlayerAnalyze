@@ -13,6 +13,7 @@ from services.calculators.phase_1b_metrics import Phase1BMetricsCalculator
 from services.calculators.phase_metrics import PhaseMetricsCalculator
 from services.calculators.precision_metrics import PrecisionMetricsCalculator
 from services.calculators.psychological import PsychologicalCalculator
+from services.calculators.temporal_windows_calculator import TemporalWindowsCalculator
 from services.calculators.time_metrics import TimeMetricsCalculator
 
 _CALCULATORS = [
@@ -25,6 +26,7 @@ _CALCULATORS = [
     Phase1BMetricsCalculator(),
     DifficultyMetricsCalculator(),
     HistoricalCalculator(max_games=50),
+    TemporalWindowsCalculator(),
 ]
 
 

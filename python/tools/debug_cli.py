@@ -71,6 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
     ab.add_argument("--depth", type=int, default=12, help="Stockfish depth")
     ab.add_argument("--output", default="./debug_results", help="Output directory")
 
+    # --- windows ---
+    ws = subparsers.add_parser("windows", help="Temporal window analysis from saved results")
+    ws.add_argument("result_file", help="Path to player JSON file")
+
     # --- compare ---
     cp = subparsers.add_parser("compare", help="Compare two result populations")
     cp.add_argument("dir_a", help="First results directory")
@@ -278,6 +282,128 @@ def cmd_score(args) -> None:
     print()
 
 
+def cmd_windows(args) -> None:
+    """Execute the windows command — temporal window analysis."""
+    result_path = Path(args.result_file)
+    if not result_path.exists():
+        print(f"Error: Result file not found: {result_path}", file=sys.stderr)
+        sys.exit(1)
+
+    data = json.loads(result_path.read_text(encoding="utf-8"))
+    username = data.get("username", "unknown")
+    games = data.get("games", [])
+
+    if not games:
+        print("Error: No games found in result file.", file=sys.stderr)
+        sys.exit(1)
+
+    # Convert games to temporal_windows format
+    from datetime import datetime
+
+    converted = []
+    for g in games:
+        # Determine player's ELO
+        is_white = username.lower() == g.get("white_username", "").lower()
+        elo = g.get("white_elo") if is_white else g.get("black_elo")
+        if elo is None:
+            continue
+
+        # Convert PGN result to win/loss/draw
+        result_str = g.get("result", "")
+        if result_str == "1-0":
+            outcome = "win" if is_white else "loss"
+        elif result_str == "0-1":
+            outcome = "loss" if is_white else "win"
+        else:
+            outcome = "draw"
+
+        # Parse date
+        date_str = g.get("date")
+        if isinstance(date_str, str):
+            try:
+                date = datetime.fromisoformat(date_str)
+            except ValueError:
+                continue
+        elif isinstance(date_str, datetime):
+            date = date_str
+        else:
+            continue
+
+        analysis = g.get("analysis", {})
+        converted.append({
+            "date": date,
+            "elo": elo,
+            "result": outcome,
+            "acpl": analysis.get("acpl"),
+            "top1_match_rate": analysis.get("top1_match_rate"),
+            "blunder_rate": analysis.get("blunder_rate"),
+        })
+
+    converted.sort(key=lambda x: x["date"])
+
+    print(f"Player: {username} ({len(converted)} games with ELO data)")
+    print()
+
+    from analysis.temporal_windows import (
+        calculate_elo_slope,
+        detect_performance_bursts,
+        detect_win_streaks,
+    )
+
+    # ELO slope
+    elo_result = calculate_elo_slope(converted)
+    print(format_section_header("ELO SLOPE ANALYSIS"))
+    print(format_metric("Total games", elo_result.total_games))
+    print(format_metric("Total ELO delta", elo_result.total_elo_delta))
+    print(format_metric("Avg slope", f"{elo_result.avg_slope:.2f}", "pts/game"))
+    if elo_result.max_slope_window:
+        w = elo_result.max_slope_window
+        print(format_metric("Max slope window",
+            f"{w.elo_slope:.1f} pts/game (games {w.start_index}-{w.end_index}, "
+            f"ELO {w.elo_start}→{w.elo_end})"))
+    print(format_metric("Suspicious windows", len(elo_result.suspicious_windows)))
+    for w in elo_result.suspicious_windows:
+        print(f"    Games {w.start_index}-{w.end_index}: "
+              f"+{w.elo_delta} ELO ({w.elo_slope:.1f} pts/game) "
+              f"[{w.start_date:%Y-%m-%d} → {w.end_date:%Y-%m-%d}]")
+    print()
+
+    # Win streaks
+    streak_result = detect_win_streaks(converted)
+    print(format_section_header("WIN STREAK ANALYSIS"))
+    print(format_metric("Overall win rate", f"{streak_result.overall_win_rate*100:.1f}%"))
+    if streak_result.max_winrate_window:
+        w = streak_result.max_winrate_window
+        print(format_metric("Max win rate window",
+            f"{w.win_rate*100:.1f}% ({w.wins}W-{w.losses}L-{w.draws}D, "
+            f"games {w.start_index}-{w.end_index})"))
+    print(format_metric("Suspicious windows", len(streak_result.suspicious_windows)))
+    for w in streak_result.suspicious_windows:
+        print(f"    Games {w.start_index}-{w.end_index}: "
+              f"{w.win_rate*100:.1f}% ({w.wins}W-{w.losses}L) "
+              f"[{w.start_date:%Y-%m-%d} → {w.end_date:%Y-%m-%d}]")
+    print()
+
+    # Performance bursts
+    burst_result = detect_performance_bursts(converted)
+    print(format_section_header("PERFORMANCE BURST ANALYSIS"))
+    print(format_metric("Burst count", len(burst_result.suspicious_windows)))
+    if burst_result.strongest_burst:
+        w = burst_result.strongest_burst
+        print(format_metric("Strongest burst",
+            f"{len(w.suspicion_reasons)} signals (games {w.start_index}-{w.end_index})"))
+        for reason in w.suspicion_reasons:
+            print(f"    - {reason}")
+    for w in burst_result.suspicious_windows:
+        if w is not burst_result.strongest_burst:
+            print(f"    Games {w.start_index}-{w.end_index}: "
+                  f"{len(w.suspicion_reasons)} signals "
+                  f"[{w.start_date:%Y-%m-%d} → {w.end_date:%Y-%m-%d}]")
+            for reason in w.suspicion_reasons:
+                print(f"      - {reason}")
+    print()
+
+
 def cmd_inspect_game(args) -> None:
     """Execute the inspect-game command."""
     result_path = Path(args.result_file)
@@ -478,6 +604,7 @@ def main() -> None:
         "analyze-batch": cmd_analyze_batch,
         "compare": cmd_compare,
         "score": cmd_score,
+        "windows": cmd_windows,
         "inspect-game": cmd_inspect_game,
     }
 

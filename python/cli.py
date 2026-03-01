@@ -173,6 +173,9 @@ def _build_result(username: str) -> dict:
         "blunder_rate_std": 0, "move_count_median": 0,
         "acpl_timeline": [], "match_rate_timeline": [],
         "move_count_mean": 0, "first_game_date": "", "last_game_date": "",
+        "tw_elo_slope_max": 0, "tw_elo_suspicious_windows": 0,
+        "tw_max_win_rate": 0, "tw_win_suspicious_windows": 0,
+        "tw_burst_count": 0,
     }
 
     data = load_player(username)
@@ -302,6 +305,13 @@ def _build_result(username: str) -> dict:
         "opening_to_middle_improvement": round(g("opening_to_middle_improvement", 0), 1),
         "variance_drop": round(g("variance_drop", 0), 2),
         "post_pause_improvement": round(g("post_pause_improvement", 0), 1),
+
+        # Temporal windows
+        "tw_elo_slope_max": round(g("tw_elo_slope_max", 0), 2),
+        "tw_elo_suspicious_windows": g("tw_elo_suspicious_windows", 0),
+        "tw_max_win_rate": round(g("tw_max_win_rate", 0) * 100, 1),
+        "tw_win_suspicious_windows": g("tw_win_suspicious_windows", 0),
+        "tw_burst_count": g("tw_burst_count", 0),
 
         # Additional stats
         "blunder_rate_std": round(g("blunder_rate_std", 0), 3),

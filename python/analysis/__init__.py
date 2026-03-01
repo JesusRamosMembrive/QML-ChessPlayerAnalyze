@@ -58,6 +58,13 @@ from .toggle_detection import (
     calculate_toggle_detection_metrics,
 )
 
+# Temporal window analysis
+from .temporal_windows import (
+    calculate_elo_slope,
+    detect_win_streaks,
+    detect_performance_bursts,
+)
+
 __all__ = [
     # Engine
     "analyze_game",
@@ -88,4 +95,8 @@ __all__ = [
     "calculate_human_impossibility_metrics",
     # Toggle detection
     "calculate_toggle_detection_metrics",
+    # Temporal window analysis
+    "calculate_elo_slope",
+    "detect_win_streaks",
+    "detect_performance_bursts",
 ]
