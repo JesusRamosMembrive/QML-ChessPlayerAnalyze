@@ -14,6 +14,13 @@ import statistics
 import sys
 from pathlib import Path
 
+def _ensure_utf8_stdout():
+    """Force UTF-8 stdout on Windows (penalty signals use ⬇ emoji)."""
+    if sys.platform == "win32":
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 from tools.analyzers import (
     analyze_pgn_transparent,
     inspect_opening_book,
@@ -223,23 +230,23 @@ def cmd_score(args) -> None:
         "collapse_rate": aggregates.get("collapse_rate"),
         "phase_consistency_middle": aggregates.get("phase_consistency_middle"),
         "robust_acpl": aggregates.get("robust_acpl"),
-        "match_rate_mean": aggregates.get("match_rate_mean"),
-        "blunder_rate": aggregates.get("blunder_rate"),
-        "top2_match_rate": aggregates.get("top2_match_rate"),
+        "match_rate_mean": aggregates.get("top5_match_rate_mean", aggregates.get("match_rate_mean")),
+        "blunder_rate": aggregates.get("blunder_rate_mean", aggregates.get("blunder_rate")),
+        "top2_match_rate": aggregates.get("top2_match_rate_mean", aggregates.get("top2_match_rate")),
         "pressure_degradation": aggregates.get("pressure_degradation"),
         "tilt_rate": aggregates.get("tilt_rate"),
         "opening_to_middle_improvement": aggregates.get("opening_to_middle_improvement"),
         "variance_drop": aggregates.get("variance_drop"),
         "post_pause_improvement": aggregates.get("post_pause_improvement"),
-        "cwmr_delta": aggregates.get("cwmr_delta"),
-        "cpa": aggregates.get("cpa"),
-        "sensitivity": aggregates.get("sensitivity"),
-        "ubma": aggregates.get("ubma"),
-        "difficulty_variance_ratio": aggregates.get("difficulty_variance_ratio"),
-        "critical_accuracy_boost": aggregates.get("critical_accuracy_boost"),
-        "oscillation_score": aggregates.get("oscillation_score"),
-        "mismatch_rate": aggregates.get("mismatch_rate"),
-        "effort_ratio": aggregates.get("effort_ratio"),
+        "cwmr_delta": aggregates.get("cwmr_delta_mean", aggregates.get("cwmr_delta")),
+        "cpa": aggregates.get("cpa_mean", aggregates.get("cpa")),
+        "sensitivity": aggregates.get("sensitivity_mean", aggregates.get("sensitivity")),
+        "ubma": aggregates.get("ubma_mean", aggregates.get("ubma")),
+        "difficulty_variance_ratio": aggregates.get("variance_ratio_mean", aggregates.get("difficulty_variance_ratio")),
+        "critical_accuracy_boost": aggregates.get("critical_accuracy_boost_mean", aggregates.get("critical_accuracy_boost")),
+        "oscillation_score": aggregates.get("oscillation_score_mean", aggregates.get("oscillation_score")),
+        "mismatch_rate": aggregates.get("mismatch_rate_mean", aggregates.get("mismatch_rate")),
+        "effort_ratio": aggregates.get("effort_ratio_mean", aggregates.get("effort_ratio")),
     }
 
     result = calculate_suspicion_score(**score_params)
@@ -483,4 +490,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    _ensure_utf8_stdout()
     main()
