@@ -68,29 +68,27 @@ def check(args):
         games_available = 0
         months = 0
         if archives_resp.status_code == 200:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
             archives = archives_resp.json().get("archives", [])
             months = len(archives)
 
-            # Count games from the last 6 months (or fewer if less available)
-            recent = archives[-6:] if len(archives) >= 6 else archives
-            for url in recent:
-                try:
-                    month_resp = requests.get(
-                        url,
-                        headers={"User-Agent": "ChessAnalyzerQML/1.0"},
-                        timeout=15,
-                    )
-                    if month_resp.status_code == 200:
-                        games_available += len(month_resp.json().get("games", []))
-                except Exception:
-                    pass
+            def _count_archive(url):
+                resp = requests.get(url, headers={"User-Agent": "ChessAnalyzerQML/1.0"}, timeout=15)
+                return len(resp.json().get("games", [])) if resp.status_code == 200 else 0
+
+            # Count games from ALL archives in parallel
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_count_archive, url) for url in archives]
+                for f in as_completed(futures):
+                    games_available += f.result()
 
         emit({
             "type": "result",
             "exists": True,
             "username": username,
             "games_available": games_available,
-            "months": min(months, 6),
+            "months": months,
         })
 
     except Exception as e:
@@ -126,7 +124,6 @@ def analyze(args):
             username=args.username,
             game_count=args.games,
             workers=args.workers,
-            months=6,
             progress_callback=on_progress,
         )
 
@@ -176,6 +173,9 @@ def _build_result(username: str) -> dict:
         "tw_elo_slope_max": 0, "tw_elo_suspicious_windows": 0,
         "tw_max_win_rate": 0, "tw_win_suspicious_windows": 0,
         "tw_burst_count": 0,
+        "tw_worst_elo_range": "", "tw_worst_elo_delta": 0,
+        "tw_worst_win_range": "",
+        "tw_strongest_burst_range": "", "tw_strongest_burst_reasons": [],
     }
 
     data = load_player(username)
@@ -313,6 +313,13 @@ def _build_result(username: str) -> dict:
         "tw_win_suspicious_windows": g("tw_win_suspicious_windows", 0),
         "tw_burst_count": g("tw_burst_count", 0),
 
+        # Temporal window details
+        "tw_worst_elo_range": g("tw_worst_elo_range", ""),
+        "tw_worst_elo_delta": g("tw_worst_elo_delta", 0),
+        "tw_worst_win_range": g("tw_worst_win_range", ""),
+        "tw_strongest_burst_range": g("tw_strongest_burst_range", ""),
+        "tw_strongest_burst_reasons": g("tw_strongest_burst_reasons", []),
+
         # Additional stats
         "blunder_rate_std": round(g("blunder_rate_std", 0), 3),
         "move_count_median": round(g("move_count_median", 0), 1),
@@ -405,7 +412,7 @@ def main():
     # analyze subcommand
     analyze_parser = subparsers.add_parser("analyze", help="Analyze a chess player")
     analyze_parser.add_argument("--username", required=True, help="Chess.com username")
-    analyze_parser.add_argument("--games", type=int, default=50, help="Number of games")
+    analyze_parser.add_argument("--games", type=int, default=0, help="Number of games (0 = all)")
     analyze_parser.add_argument("--depth", type=int, default=12, help="Stockfish depth")
     analyze_parser.add_argument("--workers", type=int, default=4, help="Parallel workers")
     analyze_parser.add_argument("--stockfish", default=default_sf, help="Stockfish path")

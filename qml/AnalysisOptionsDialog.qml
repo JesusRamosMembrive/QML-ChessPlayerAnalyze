@@ -6,6 +6,7 @@ import ChessAnalyzerQML
 Popup {
     id: root
 
+    required property var controller
     required property string username
     required property int gamesAvailable
 
@@ -94,8 +95,8 @@ Popup {
                     id: gamesSlider
                     Layout.fillWidth: true
                     from: 10
-                    to: Math.min(200, root.gamesAvailable)
-                    stepSize: 10
+                    to: root.gamesAvailable
+                    stepSize: root.gamesAvailable <= 500 ? 10 : 50
                     value: Math.min(50, root.gamesAvailable)
 
                     background: Rectangle {
@@ -130,7 +131,7 @@ Popup {
                     Layout.fillWidth: true
                     Label { text: "10";  font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
                     Item { Layout.fillWidth: true }
-                    Label { text: Math.min(200, root.gamesAvailable).toString(); font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
+                    Label { text: root.gamesAvailable.toString(); font.pixelSize: Theme.fontCaption; color: Theme.textDisabled }
                 }
             }
 
@@ -266,6 +267,35 @@ Popup {
                 }
             }
 
+            // Temporal Windows toggle
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Label {
+                        text: "Temporal window analysis"
+                        font.pixelSize: Theme.fontLabel
+                        font.weight: Font.Medium
+                        color: Theme.textSecondary
+                    }
+                    Label {
+                        text: "Detect suspicious ELO jumps and performance bursts"
+                        font.pixelSize: Theme.fontCaption
+                        color: Theme.textDisabled
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+
+                Switch {
+                    id: windowsSwitch
+                    checked: false
+                }
+            }
+
             // Summary
             Rectangle {
                 Layout.fillWidth: true
@@ -356,6 +386,7 @@ Popup {
                 }
 
                 onClicked: {
+                    root.controller.temporalWindowsEnabled = windowsSwitch.checked
                     root.startRequested(gamesSlider.value, depthSlider.value, workersSlider.value)
                     root.close()
                 }

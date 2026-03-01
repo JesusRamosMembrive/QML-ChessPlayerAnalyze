@@ -57,9 +57,8 @@ class AnalysisService:
     def analyze_player(
         self,
         username: str,
-        game_count: int = 200,
+        game_count: int = 0,
         workers: int = 4,
-        months: int = 6,
         progress_callback: Callable[[dict], None] | None = None,
         cancellation_event: threading.Event | None = None,
         analysis_config: dict | None = None,
@@ -83,12 +82,12 @@ class AnalysisService:
         analyzed_urls = {g["url"] for g in existing_games if g.get("url")}
 
         # Step 2: Fetch games from Chess.com
-        all_fetched = fetch_games(username, months=months)
+        all_fetched = fetch_games(username)
         if not all_fetched:
             return {"total_fetched": 0, "new_analyses": 0, "failed_analyses": 0}
 
-        # Limit to requested count (most recent)
-        fetched = all_fetched[-game_count:]
+        # Limit to requested count (most recent), 0 = all games
+        fetched = all_fetched[-game_count:] if game_count > 0 else all_fetched
 
         # Step 3: Filter — skip already analyzed + validate
         games_to_analyze = []

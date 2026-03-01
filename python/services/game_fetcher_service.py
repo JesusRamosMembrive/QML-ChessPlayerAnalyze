@@ -5,6 +5,7 @@ Standalone functions for fetching games. No database dependencies.
 """
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 
 import requests
@@ -35,13 +36,62 @@ def _parse_clock_time(time_str: str) -> int:
     return int(hours * 3600 + minutes * 60 + seconds)
 
 
-def fetch_games(username: str, months: int = 12) -> list[dict]:
+def _fetch_single_archive(archive_url: str) -> list[dict]:
+    """Fetch and parse games from a single monthly archive URL."""
+    try:
+        resp = requests.get(archive_url, headers={"User-Agent": _USER_AGENT}, timeout=15)
+        data = resp.json()
+        games = []
+
+        for game in data.get("games", []):
+            pgn = game["pgn"]
+
+            # Extract clock times from PGN comments
+            clocks = _CLK_RGX.findall(pgn)
+
+            # Calculate time spent per move (clock difference)
+            move_times = []
+            clock_times = []  # Remaining time on clock after each move
+
+            if clocks:
+                # Store remaining clock times (for pressure detection)
+                clock_times = [_parse_clock_time(clk) for clk in clocks]
+
+                # Calculate move times (time spent per move)
+                for i in range(1, len(clocks)):
+                    time_before = _parse_clock_time(clocks[i - 1])
+                    time_after = _parse_clock_time(clocks[i])
+                    time_spent = time_before - time_after
+                    move_times.append(time_spent)
+
+            games.append(
+                {
+                    "pgn": pgn,
+                    "move_times": move_times,
+                    "clock_times": clock_times,
+                    "white": game["white"]["username"],
+                    "black": game["black"]["username"],
+                    "white_elo": game["white"].get("rating"),
+                    "black_elo": game["black"].get("rating"),
+                    "end_time": datetime.fromtimestamp(game["end_time"], UTC).isoformat(),
+                }
+            )
+
+        return games
+
+    except Exception as e:
+        print(f"  Warning: Error processing archive {archive_url}: {e}")
+        return []
+
+
+def fetch_games(username: str) -> list[dict]:
     """
     Download games from Chess.com for a given player.
 
+    Fetches ALL available archives in parallel for speed.
+
     Args:
         username: Chess.com username
-        months: Number of recent months to fetch (default: 12)
 
     Returns:
         List of dicts with keys:
@@ -57,69 +107,29 @@ def fetch_games(username: str, months: int = 12) -> list[dict]:
     Raises:
         requests.HTTPError: If API request fails
     """
-    session = requests.Session()
-    session.headers["User-Agent"] = _USER_AGENT
-
     # Get list of available archives
     archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
     print(f"Fetching archives from Chess.com for {username}...")
 
     try:
-        response = session.get(archives_url, timeout=10)
+        response = requests.get(archives_url, headers={"User-Agent": _USER_AGENT}, timeout=10)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"Error fetching archives: {e}")
         raise
 
-    archives = response.json()["archives"][-months:]  # Most recent N months
-    print(f"Found {len(archives)} monthly archives")
+    archives = response.json()["archives"]
+    print(f"Found {len(archives)} monthly archives — fetching all in parallel...")
 
     games: list[dict] = []
 
-    for idx, archive_url in enumerate(archives, 1):
-        print(f"Processing archive {idx}/{len(archives)}: {archive_url}")
-
-        try:
-            data = session.get(archive_url, timeout=10).json()
-            print(f"  Found {len(data.get('games', []))} games in this archive")
-
-            for game in data["games"]:
-                pgn = game["pgn"]
-
-                # Extract clock times from PGN comments
-                clocks = _CLK_RGX.findall(pgn)
-
-                # Calculate time spent per move (clock difference)
-                move_times = []
-                clock_times = []  # Remaining time on clock after each move
-
-                if clocks:
-                    # Store remaining clock times (for pressure detection)
-                    clock_times = [_parse_clock_time(clk) for clk in clocks]
-
-                    # Calculate move times (time spent per move)
-                    for i in range(1, len(clocks)):
-                        time_before = _parse_clock_time(clocks[i - 1])
-                        time_after = _parse_clock_time(clocks[i])
-                        time_spent = time_before - time_after
-                        move_times.append(time_spent)
-
-                games.append(
-                    {
-                        "pgn": pgn,
-                        "move_times": move_times,
-                        "clock_times": clock_times,
-                        "white": game["white"]["username"],
-                        "black": game["black"]["username"],
-                        "white_elo": game["white"].get("rating"),
-                        "black_elo": game["black"].get("rating"),
-                        "end_time": datetime.fromtimestamp(game["end_time"], UTC).isoformat(),
-                    }
-                )
-
-        except Exception as e:
-            print(f"  Warning: Error processing archive {archive_url}: {e}")
-            continue
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_url = {
+            executor.submit(_fetch_single_archive, url): url for url in archives
+        }
+        for future in as_completed(future_to_url):
+            archive_games = future.result()
+            games.extend(archive_games)
 
     # Sort games by end_time to ensure chronological order (oldest to newest)
     games.sort(key=lambda g: g["end_time"])
