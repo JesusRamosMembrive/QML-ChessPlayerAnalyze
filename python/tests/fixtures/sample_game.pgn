@@ -1,0 +1,18 @@
+[Event "Rated Blitz game"]
+[Site "Chess.com"]
+[Date "2024.06.15"]
+[White "TestPlayer"]
+[Black "Opponent"]
+[Result "1-0"]
+[WhiteElo "1500"]
+[BlackElo "1480"]
+[TimeControl "180"]
+[ECO "C50"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. d3 Be7 5. O-O O-O 6. Nc3 d6 7. a4 Be6
+8. Bxe6 fxe6 9. Nxe5 Rb8 10. Nxc6 bxc6 11. e5 Qc8 12. exd6 Ra8 13. dxc7 h6
+14. Bxh6 Qe8 15. Bc1 Nh5 16. Qxh5 Qxh5 17. f4 Rxf4 18. Rf2 Rxa4 19. Rxa4
+Qxh2+ 20. Kf1 Qxg2+ 21. Kxg2 g5 22. Rxa7 Rxa7 23. Bxg5 Bxg5 24. Rf1 Rxc7
+25. Nb5 cxb5 26. Ra1 Rxc2+ 27. Kg3 Rxb2 28. Ra2 e5 29. Rxb2 b4 30. Kg2 e4
+31. dxe4 Kh8 32. Rxb4 Bd8 33. Rb8 Kh7 34. Rb2 Bh4 35. Re2 Kh8 36. Kf3 Be1
+37. Rxe1 Kg7 38. Kg3 Kg8 39. Rd1 Kh8 40. Rf1 Kh7 1-0
