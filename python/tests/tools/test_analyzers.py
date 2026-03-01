@@ -1,6 +1,7 @@
 """Tests for analysis wrapper functions."""
 
-from tools.analyzers import inspect_phase_classification, inspect_opening_book
+from unittest.mock import patch
+from tools.analyzers import inspect_phase_classification, inspect_opening_book, analyze_pgn_transparent
 
 # Minimal valid PGN for testing (no Stockfish needed)
 SAMPLE_PGN = """[Event "Test"]
@@ -63,3 +64,72 @@ class TestInspectOpeningBook:
         if not result["book_file_exists"]:
             assert result["detection_method"] == "fallback"
             assert result["out_of_book_index"] == 10
+
+
+# Helper to create mock move evaluations
+def _make_move_eval(move_num, cp_loss=10, best_rank=0, is_book=False):
+    return {
+        "move_number": move_num,
+        "played": "e4",
+        "best": "e4",
+        "best_rank": best_rank,
+        "eval_before": 30,
+        "eval_after": 30 - cp_loss,
+        "cp_loss": cp_loss,
+        "legal_moves": 20,
+        "is_book_move": is_book,
+        "is_capture": False,
+        "improvement": -cp_loss,
+        "material_sacrificed": 0,
+        "multipv_evals": [30, 25, 20, 15, 10],
+        "top_gap": 5,
+        "eval_spread": 20,
+    }
+
+MOCK_MOVE_EVALS = [_make_move_eval(i, cp_loss=10 + i, best_rank=0 if i % 3 == 0 else 2)
+                   for i in range(1, 26)]
+
+
+class TestAnalyzePgnTransparent:
+    @patch("tools.analyzers.analyze_game")
+    def test_returns_all_sections(self, mock_analyze):
+        mock_analyze.return_value = MOCK_MOVE_EVALS
+        result = analyze_pgn_transparent(
+            SAMPLE_PGN,
+            player_color="white",
+            stockfish_path="stockfish",
+            depth=12,
+        )
+        assert "move_evals" in result
+        assert "phase_classification" in result
+        assert "opening_book" in result
+        assert "metrics" in result
+        assert "warnings" in result
+
+    @patch("tools.analyzers.analyze_game")
+    def test_metrics_calculated(self, mock_analyze):
+        mock_analyze.return_value = MOCK_MOVE_EVALS
+        result = analyze_pgn_transparent(
+            SAMPLE_PGN,
+            player_color="white",
+            stockfish_path="stockfish",
+            depth=12,
+        )
+        metrics = result["metrics"]
+        assert "acpl" in metrics
+        assert "robust_acpl" in metrics
+        assert "match_rates" in metrics
+        assert "blunders" in metrics
+        assert "phase_breakdown" in metrics
+
+    @patch("tools.analyzers.analyze_game")
+    def test_warnings_generated(self, mock_analyze):
+        book_evals = [_make_move_eval(i, is_book=True) for i in range(1, 26)]
+        mock_analyze.return_value = book_evals
+        result = analyze_pgn_transparent(
+            SAMPLE_PGN,
+            player_color="white",
+            stockfish_path="stockfish",
+            depth=12,
+        )
+        assert len(result["warnings"]) > 0
